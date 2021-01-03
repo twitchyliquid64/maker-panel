@@ -29,9 +29,12 @@ fn main() {
 
     let n = panel.make_svg().unwrap();
 
-    println!("{}", n.to_string(usvg::XmlOptions::default()));
+    // println!("{}", n.to_string(usvg::XmlOptions::default()));
     resvg::render_node(&n.root(), DEFAULT_FIT, Some(usvg::Color::white()))
         .unwrap()
         .save_png("/tmp/ye.png")
         .unwrap();
+
+    let mut stdout = std::io::stdout();
+    panel.serialize_gerber_edges(&mut stdout).unwrap();
 }

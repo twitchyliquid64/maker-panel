@@ -1,10 +1,15 @@
+extern crate conv;
 extern crate geo_booleanop;
+extern crate gerber_types;
+
 use geo::{Coordinate, MultiPolygon};
 use geo_booleanop::boolean::BooleanOp;
 use usvg::NodeExt;
 
 pub mod features;
 use features::{Feature, InnerAtom};
+
+pub mod gerber;
 
 /// PCB layers.
 #[derive(Debug, Clone)]
@@ -147,6 +152,27 @@ impl<'a> Panel<'a> {
             .map(|f| f.interior())
             .flatten()
             .collect()
+    }
+
+    pub fn serialize_gerber_edges<W: std::io::Write>(&self, w: &mut W) -> Result<(), Err> {
+        let edges = match self.edge_geometry() {
+            Some(edges) => edges,
+            None => {
+                return Err(Err::NoFeatures);
+            }
+        };
+
+        if edges.iter().count() > 1 {
+            // println!("failing geo = {:?}\n\n", edges);
+            return Err(Err::BadEdgeGeometry(
+                "multiple polygons provided for edge geometry".to_string(),
+            ));
+        }
+
+        let commands = gerber::serialize_edge(edges).unwrap();
+        use gerber_types::GerberCode;
+        commands.serialize(w).unwrap();
+        Ok(())
     }
 
     /// Produces an SVG tree rendering the panel.
