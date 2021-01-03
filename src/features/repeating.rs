@@ -35,8 +35,8 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
         "repeating::Tile"
     }
 
-    fn edge(&self) -> Option<MultiPolygon<f64>> {
-        match self.inner.edge() {
+    fn edge_union(&self) -> Option<MultiPolygon<f64>> {
+        match self.inner.edge_union() {
             Some(edge_geo) => {
                 let mut out = edge_geo.clone();
                 use geo::{bounding_rect::BoundingRect, translate::Translate};
@@ -50,7 +50,6 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
                     use geo_booleanop::boolean::BooleanOp;
                     out = out.union(&next);
                 }
-                println!("tiling geo = {:?}", out);
                 Some(out)
             }
             None => None,
@@ -65,7 +64,7 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
         let inner = self.inner.interior();
         let mut out = Vec::with_capacity(inner.len() * self.amt);
 
-        let bounds = match self.inner.edge() {
+        let bounds = match self.inner.edge_union() {
             Some(edge_geo) => {
                 use geo::bounding_rect::BoundingRect;
                 edge_geo.bounding_rect().unwrap()

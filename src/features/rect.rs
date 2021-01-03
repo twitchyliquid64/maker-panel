@@ -70,7 +70,7 @@ impl<U: super::InnerFeature> super::Feature for Rect<U> {
         "rect"
     }
 
-    fn edge(&self) -> Option<MultiPolygon<f64>> {
+    fn edge_union(&self) -> Option<MultiPolygon<f64>> {
         Some(self.rect.clone().to_polygon().into())
     }
 

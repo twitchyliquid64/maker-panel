@@ -107,7 +107,7 @@ impl<'a> Panel<'a> {
         let edge = self
             .features
             .iter()
-            .map(|f| f.edge())
+            .map(|f| f.edge_union())
             .fold(None, |mut acc, g| {
                 if let Some(poly) = g {
                     if let Some(current) = acc {

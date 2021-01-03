@@ -16,7 +16,7 @@ impl super::Feature for Unit {
         "unit"
     }
 
-    fn edge(&self) -> Option<MultiPolygon<f64>> {
+    fn edge_union(&self) -> Option<MultiPolygon<f64>> {
         None
     }
 

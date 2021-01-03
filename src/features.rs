@@ -1,10 +1,14 @@
+//! Components which compose a panel.
+
 use geo::{Coordinate, MultiPolygon};
 use std::fmt;
 
+mod circle;
 mod rect;
 pub mod repeating;
 mod screw_hole;
 mod unit;
+pub use circle::Circle;
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
 pub use unit::Unit;
@@ -18,13 +22,31 @@ pub trait InnerFeature: fmt::Display {
 
 /// A top-level unit that makes up the geometry of the panel.
 pub trait Feature: fmt::Display {
+    /// Human-readable name describing the construction.
     fn name(&self) -> &'static str;
+    /// Adjust all coordinates by the specified amount. Should
+    /// affect all geometries returned from [`Feature::edge_union`],
+    /// [`Feature::edge_subtract`], and [`Feature::interior`].
     fn translate(&mut self, v: Coordinate<f64>);
-    fn edge(&self) -> Option<MultiPolygon<f64>>;
+
+    /// Returns the outer geometry describing the boundaries of the
+    /// panel, which should be unioned with the outer geometry of all
+    /// other features.
+    fn edge_union(&self) -> Option<MultiPolygon<f64>>;
+
+    /// Returns the inner geometry describing features on the panel,
+    /// within the bounds of the computed edge geometry.
     fn interior(&self) -> Vec<InnerAtom>;
+
+    /// Returns the outer geometry describing the boundaries of the
+    /// panel, which should be subtracted from the outer geometry of all
+    /// other features.
+    fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
+        None
+    }
 }
 
-/// The smallest geometrys from which inner features are composed.
+/// The smallest geometries from which inner features are composed.
 #[derive(Debug, Clone)]
 pub enum InnerAtom {
     Drill {
