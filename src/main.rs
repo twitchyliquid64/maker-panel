@@ -1,18 +1,33 @@
-use maker_panel::{features::Rect, make_svg, Err, PanelBuilder};
+use maker_panel::{
+    features::{repeating, Rect, ScrewHole},
+    Direction, Err, Panel,
+};
 
-const DEFAULT_FIT: usvg::FitTo = usvg::FitTo::Width(450);
+const DEFAULT_FIT: usvg::FitTo = usvg::FitTo::Zoom(23.);
 
 fn main() {
-    let mut panel = PanelBuilder::new();
-    panel.push(Rect::new_with_center([-2.5, -2.5].into(), 5., 5.));
-    panel.push(Rect::new([-0., -1.].into(), [5., 3.].into()));
+    let mut panel = Panel::new();
+    panel.convex_hull(true);
+    // panel.push(Rect::with_center([0.0, -2.5].into(), 5., 5.));
+    panel.push(repeating::Tile::new(
+        Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
+        Direction::Right,
+        3,
+    ));
+    panel.push(repeating::Tile::new(
+        Rect::with_inner(ScrewHole::default(), [2.5, 5.].into(), [7.5, 10.].into()),
+        Direction::Right,
+        2,
+    ));
+    panel.push(repeating::Tile::new(
+        Rect::with_inner(ScrewHole::default(), [0., 10.].into(), [5., 15.].into()),
+        Direction::Right,
+        3,
+    ));
 
-    println!("panel: {}", panel);
-    println!("edges: {:?}", panel.edge_geometry());
+    let n = panel.make_svg().unwrap();
 
-    let n = make_svg(panel.edge_geometry().unwrap()).unwrap();
-
-    // println!("{}", n.to_string(usvg::XmlOptions::default()));
+    println!("{}", n.to_string(usvg::XmlOptions::default()));
     resvg::render_node(&n.root(), DEFAULT_FIT, Some(usvg::Color::white()))
         .unwrap()
         .save_png("/tmp/ye.png")

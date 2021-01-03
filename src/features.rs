@@ -1,62 +1,102 @@
-use geo::{Coordinate, LineString, MultiPolygon};
+use geo::{Coordinate, MultiPolygon};
 use std::fmt;
 
-/// A single unit that makes up the geometry of the panel.
+mod rect;
+pub mod repeating;
+mod screw_hole;
+mod unit;
+pub use rect::Rect;
+pub use screw_hole::ScrewHole;
+pub use unit::Unit;
+
+/// Specifies geometry interior to the bounds of the panel.
+pub trait InnerFeature: fmt::Display {
+    fn name(&self) -> &'static str;
+    fn translate(&mut self, v: Coordinate<f64>);
+    fn atoms(&self) -> Vec<InnerAtom>;
+}
+
+/// A top-level unit that makes up the geometry of the panel.
 pub trait Feature: fmt::Display {
     fn name(&self) -> &'static str;
-    fn id(&self) -> Option<String>;
+    fn translate(&mut self, v: Coordinate<f64>);
     fn edge(&self) -> Option<MultiPolygon<f64>>;
+    fn interior(&self) -> Vec<InnerAtom>;
 }
 
-/// A rectangular region with square edges.
+/// The smallest geometrys from which inner features are composed.
 #[derive(Debug, Clone)]
-pub struct Rect {
-    rect: geo::Rect<f64>,
+pub enum InnerAtom {
+    Drill {
+        center: Coordinate<f64>,
+        radius: f64,
+    },
+    Circle {
+        center: Coordinate<f64>,
+        radius: f64,
+        layer: super::Layer,
+    },
 }
 
-impl Rect {
-    /// Constructs a new rectangle using the provided corners.
-    pub fn new(top_left: Coordinate<f64>, bottom_right: Coordinate<f64>) -> Self {
-        Self {
-            rect: geo::Rect::new(top_left, bottom_right),
+impl InnerAtom {
+    pub fn stroke(&self) -> Option<usvg::Stroke> {
+        match self {
+            // InnerAtom::Circle { layer, .. } => Some(usvg::Stroke {
+            //     paint: usvg::Paint::Color(layer.color()),
+            //     width: usvg::StrokeWidth::new(0.1),
+            //     opacity: usvg::Opacity::new(0.5),
+            //     ..usvg::Stroke::default()
+            // }),
+            _ => None,
         }
     }
 
-    /// Constructs a new rectangle given a center point and sizes.
-    pub fn new_with_center(center: Coordinate<f64>, width: f64, height: f64) -> Self {
-        Self {
-            rect: geo::Rect::new(
-                center
-                    + Coordinate {
-                        x: -width / 2.,
-                        y: -height / 2.,
-                    },
-                center
-                    + Coordinate {
-                        x: width / 2.,
-                        y: height / 2.,
-                    },
+    pub fn fill(&self) -> Option<usvg::Fill> {
+        match self {
+            InnerAtom::Drill { .. } => Some(usvg::Fill {
+                paint: usvg::Paint::Color(usvg::Color::new(0x25, 0x25, 0x25)),
+                ..usvg::Fill::default()
+            }),
+            InnerAtom::Circle { layer, .. } => Some(usvg::Fill {
+                paint: usvg::Paint::Color(layer.color()),
+                ..usvg::Fill::default()
+            }),
+        }
+    }
+
+    pub fn bounds(&self) -> geo::Rect<f64> {
+        match self {
+            InnerAtom::Drill { center, radius } => geo::Rect::new(
+                Coordinate {
+                    x: center.x - radius,
+                    y: center.y - radius,
+                },
+                Coordinate {
+                    x: center.x + radius,
+                    y: center.y + radius,
+                },
+            ),
+            InnerAtom::Circle { center, radius, .. } => geo::Rect::new(
+                Coordinate {
+                    x: center.x - radius,
+                    y: center.y - radius,
+                },
+                Coordinate {
+                    x: center.x + radius,
+                    y: center.y + radius,
+                },
             ),
         }
     }
-}
 
-impl fmt::Display for Rect {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "rect({:?}, {:?})", self.rect.min(), self.rect.max())
-    }
-}
-
-impl Feature for Rect {
-    fn name(&self) -> &'static str {
-        "rect"
-    }
-
-    fn id(&self) -> Option<String> {
-        None
-    }
-
-    fn edge(&self) -> Option<MultiPolygon<f64>> {
-        Some(self.rect.clone().to_polygon().into())
+    pub fn translate(&mut self, x: f64, y: f64) {
+        match self {
+            InnerAtom::Drill { ref mut center, .. } => {
+                *center = *center + Coordinate { x, y };
+            }
+            InnerAtom::Circle { center, .. } => {
+                *center = *center + Coordinate { x, y };
+            }
+        }
     }
 }
