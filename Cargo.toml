@@ -1,6 +1,8 @@
 [package]
 name = "maker-panel"
-version = "0.1.0"
+description = "Generator for modular mechanical panels"
+license = "MIT"
+version = "0.2.0"
 authors = ["Tom <twitchyliquid64@ciphersink.net>"]
 edition = "2018"
 

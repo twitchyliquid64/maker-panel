@@ -191,7 +191,7 @@ dependencies = [
  "geo-types",
  "geographiclib-rs",
  "num-traits",
- "robust 0.2.2",
+ "robust 0.2.3",
  "rstar",
 ]
 
@@ -300,7 +300,7 @@ dependencies = [
 
 [[package]]
 name = "maker-panel"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "geo",
  "geo-booleanop",
@@ -462,9 +462,9 @@ checksum = "222155e5550abd9100afdcdefbd08aa1b856d226b60e327044ec21b1ece2f78e"
 
 [[package]]
 name = "robust"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1a6eb3bd241993b09a354047bfba030778b347ac4de4bc0fd80e531e7cbfac8"
+checksum = "e5864e7ef1a6b7bcf1d6ca3f655e65e724ed3b52546a0d0a663c991522f552ea"
 
 [[package]]
 name = "roxmltree"
