@@ -11,6 +11,14 @@ use features::{Feature, InnerAtom};
 
 pub mod gerber;
 
+/// Alignment of multiple elements in an array.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Align {
+    Start,
+    Center,
+    End,
+}
+
 /// PCB layers.
 #[derive(Debug, Clone)]
 pub enum Layer {

@@ -11,6 +11,17 @@ pub struct ScrewHole {
     annular_ring_radius: f64,
 }
 
+impl ScrewHole {
+    /// Creates a screw hole with the specified diameter.
+    pub fn with_diameter(dia: f64) -> Self {
+        Self {
+            drill_radius: dia / 2.0,
+            annular_ring_radius: (dia / 2.0) + 0.3,
+            ..Self::default()
+        }
+    }
+}
+
 impl Default for ScrewHole {
     fn default() -> Self {
         Self {

@@ -10,13 +10,19 @@ pub struct Circle<U = super::Unit> {
 }
 
 impl Circle {
-    /// Constructs a new rectangle using the provided corners.
+    /// Constructs a new circle using the provided center and radius.
     pub fn new(center: Coordinate<f64>, radius: f64) -> Self {
         Self {
             center,
             radius,
             inner: super::Unit,
         }
+    }
+
+    /// Constructs a new circle with the provided radius, centered on
+    /// the origin.
+    pub fn with_radius(radius: f64) -> Self {
+        Self::new([0.0, 0.0].into(), radius)
     }
 }
 
@@ -31,6 +37,15 @@ impl<U: super::InnerFeature> Circle<U> {
             center,
             radius,
             inner,
+        }
+    }
+
+    /// Constructs a circle with a given radius surrounding the inner feature.
+    pub fn wrap_with_radius(inner: U, radius: f64) -> Self {
+        Self {
+            radius,
+            inner,
+            center: [0.0, 0.0].into(),
         }
     }
 }

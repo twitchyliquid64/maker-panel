@@ -3,12 +3,16 @@
 use geo::{Coordinate, MultiPolygon};
 use std::fmt;
 
+mod array;
 mod circle;
+mod pos;
 mod rect;
 pub mod repeating;
 mod screw_hole;
 mod unit;
+pub use array::Column;
 pub use circle::Circle;
+pub use pos::AtPos;
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
 pub use unit::Unit;
