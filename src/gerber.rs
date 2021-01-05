@@ -176,11 +176,19 @@ pub fn serialize_layer(
                 pos: ExtendedPosition::Bottom,
                 copper_type: None,
             },
+            super::Layer::FrontLegend => FileFunction::Legend {
+                pos: Position::Top,
+                index: None,
+            },
             super::Layer::FrontMask => FileFunction::Soldermask {
                 pos: Position::Top,
                 index: None,
             },
             super::Layer::BackMask => FileFunction::Soldermask {
+                pos: Position::Bottom,
+                index: None,
+            },
+            super::Layer::BackLegend => FileFunction::Legend {
                 pos: Position::Bottom,
                 index: None,
             },

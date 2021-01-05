@@ -24,8 +24,10 @@ pub enum Align {
 pub enum Layer {
     FrontCopper,
     FrontMask,
+    FrontLegend,
     BackCopper,
     BackMask,
+    BackLegend,
 }
 
 impl Layer {
@@ -33,8 +35,10 @@ impl Layer {
         match self {
             Layer::FrontCopper => usvg::Color::new(0x84, 0, 0),
             Layer::FrontMask => usvg::Color::new(0x84, 0, 0x84),
+            Layer::FrontLegend => usvg::Color::new(0, 0, 0x84),
             Layer::BackCopper => usvg::Color::new(0, 0x84, 0),
             Layer::BackMask => usvg::Color::new(0x84, 0, 0x84),
+            Layer::BackLegend => usvg::Color::new(0x4, 0, 0x84),
         }
     }
 }

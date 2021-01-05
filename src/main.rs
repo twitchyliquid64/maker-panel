@@ -11,8 +11,10 @@ pub enum Fmt {
     Edge,
     FrontCopper,
     FrontMask,
+    FrontLegend,
     BackCopper,
     BackMask,
+    BackLegend,
 }
 
 impl Fmt {
@@ -21,8 +23,10 @@ impl Fmt {
             Fmt::Edge => "Edge.Cuts.gm1",
             Fmt::FrontCopper => "F.Cu.gtl",
             Fmt::FrontMask => "F.Mask.gts",
+            Fmt::FrontLegend => "F.SilkS.gto",
             Fmt::BackCopper => "B.Cu.gbl",
             Fmt::BackMask => "B.Mask.gbs",
+            Fmt::BackLegend => "B.SilkS.gto",
         }
     }
 }
@@ -35,8 +39,10 @@ impl std::str::FromStr for Fmt {
             "edge" => Ok(Fmt::Edge),
             "f.cu" => Ok(Fmt::FrontCopper),
             "f.mask" => Ok(Fmt::FrontMask),
+            "f.legend" => Ok(Fmt::FrontLegend),
             "b.cu" => Ok(Fmt::BackCopper),
             "b.mask" => Ok(Fmt::BackMask),
+            "b.legend" => Ok(Fmt::BackLegend),
             _ => Err(format!("no such fmt: {}", s).to_string()),
         }
     }
@@ -151,11 +157,17 @@ fn run_cmd(args: Opt, panel: Panel) {
             Fmt::FrontMask => panel
                 .serialize_gerber_layer(Layer::FrontMask, &mut stdout)
                 .unwrap(),
+            Fmt::FrontLegend => panel
+                .serialize_gerber_layer(Layer::FrontLegend, &mut stdout)
+                .unwrap(),
             Fmt::BackCopper => panel
                 .serialize_gerber_layer(Layer::BackCopper, &mut stdout)
                 .unwrap(),
             Fmt::BackMask => panel
                 .serialize_gerber_layer(Layer::BackMask, &mut stdout)
+                .unwrap(),
+            Fmt::BackLegend => panel
+                .serialize_gerber_layer(Layer::BackLegend, &mut stdout)
                 .unwrap(),
         },
     };
