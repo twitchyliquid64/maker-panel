@@ -5,8 +5,7 @@ use maker_panel::{
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-const DEFAULT_FIT: usvg::FitTo = usvg::FitTo::Zoom(23.);
-
+/// Represents an output format provided for the gen command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fmt {
     Edge,
@@ -43,9 +42,49 @@ impl std::str::FromStr for Fmt {
     }
 }
 
-#[allow(non_camel_case_types)]
+/// Represents the --size parameter from the command line.
+#[derive(Debug, PartialEq, Clone)]
+pub struct RenderFitTo(usvg::FitTo);
+
+impl std::str::FromStr for RenderFitTo {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s == "mm" {
+            return Ok(RenderFitTo(usvg::FitTo::Original));
+        };
+
+        if s.starts_with("z:") {
+            return Ok(RenderFitTo(usvg::FitTo::Zoom(
+                s[2..]
+                    .parse::<f32>()
+                    .map_err(|e| format!("invalid zoom: {}", e))?,
+            )));
+        };
+
+        Ok(RenderFitTo(usvg::FitTo::Width(
+            s.parse::<u32>()
+                .map_err(|e| format!("invalid width: {}", e))?,
+        )))
+    }
+}
+
 #[derive(StructOpt, Debug, PartialEq, Clone)]
 pub enum Cmd {
+    #[structopt(name = "png", about = "Renders a PNG visualizing the panel.")]
+    Render {
+        #[structopt(
+            name = "size",
+            short = "s",
+            long = "size",
+            about = "Specify z:<zoom> or width in pixels",
+            default_value = "z:21.0"
+        )]
+        fit_to: RenderFitTo,
+
+        output: PathBuf,
+    },
+    #[structopt(name = "gen", about = "Generates CAD files.")]
     Gen { fmt: Fmt },
 }
 
@@ -89,17 +128,21 @@ fn main() {
     // panel.push(Circle::new([0., 7.5].into(), 7.5));
     // panel.push(Circle::new([20., 7.5].into(), 7.5));
 
-    let n = panel.make_svg().unwrap();
+    run_cmd(args, panel);
+}
 
-    // println!("{}", n.to_string(usvg::XmlOptions::default()));
-    resvg::render_node(&n.root(), DEFAULT_FIT, Some(usvg::Color::white()))
-        .unwrap()
-        .save_png("/tmp/ye.png")
-        .unwrap();
-
+fn run_cmd(args: Opt, panel: Panel) {
     let mut stdout = std::io::stdout();
 
     match args.cmd {
+        Cmd::Render { output, fit_to } => {
+            let n = panel.make_svg().unwrap();
+            // println!("{}", n.to_string(usvg::XmlOptions::default()));
+            resvg::render_node(&n.root(), fit_to.0, Some(usvg::Color::white()))
+                .unwrap()
+                .save_png(output)
+                .unwrap();
+        }
         Cmd::Gen { fmt } => match fmt {
             Fmt::Edge => panel.serialize_gerber_edges(&mut stdout).unwrap(),
             Fmt::FrontCopper => panel

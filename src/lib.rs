@@ -162,8 +162,7 @@ impl<'a> Panel<'a> {
             .collect()
     }
 
-    /// Serializes a gerber file describing the PCB profile to the provided writer.
-    pub fn serialize_gerber_edges<W: std::io::Write>(&self, w: &mut W) -> Result<(), Err> {
+    fn edge_poly(&self) -> Result<geo::Polygon<f64>, Err> {
         let edges = match self.edge_geometry() {
             Some(edges) => edges,
             None => {
@@ -171,13 +170,19 @@ impl<'a> Panel<'a> {
             }
         };
 
-        if edges.iter().count() > 1 {
-            // println!("failing geo = {:?}\n\n", edges);
-            return Err(Err::BadEdgeGeometry(
+        let mut polys = edges.into_iter();
+        match polys.len() {
+            0 => Err(Err::NoFeatures),
+            1 => Ok(polys.next().unwrap()),
+            _ => Err(Err::BadEdgeGeometry(
                 "multiple polygons provided for edge geometry".to_string(),
-            ));
+            )),
         }
+    }
 
+    /// Serializes a gerber file describing the PCB profile to the provided writer.
+    pub fn serialize_gerber_edges<W: std::io::Write>(&self, w: &mut W) -> Result<(), Err> {
+        let edges = self.edge_poly()?;
         let commands = gerber::serialize_edge(edges).unwrap();
         use gerber_types::GerberCode;
         commands.serialize(w).unwrap();
@@ -199,20 +204,7 @@ impl<'a> Panel<'a> {
 
     /// Produces an SVG tree rendering the panel.
     pub fn make_svg(&self) -> Result<usvg::Tree, Err> {
-        let edges = match self.edge_geometry() {
-            Some(edges) => edges,
-            None => {
-                return Err(Err::NoFeatures);
-            }
-        };
-
-        if edges.iter().count() > 1 {
-            // println!("failing geo = {:?}\n\n", edges);
-            return Err(Err::BadEdgeGeometry(
-                "multiple polygons provided for edge geometry".to_string(),
-            ));
-        }
-
+        let edges = self.edge_poly()?;
         use geo::bounding_rect::BoundingRect;
         let bounds = edges.bounding_rect().unwrap();
 
@@ -226,15 +218,13 @@ impl<'a> Panel<'a> {
         });
 
         let mut path = usvg::PathData::new();
-        for poly in edges.iter() {
-            let mut has_moved = false;
-            for point in poly.exterior().points_iter() {
-                if !has_moved {
-                    has_moved = true;
-                    path.push_move_to(point.x(), point.y());
-                } else {
-                    path.push_line_to(point.x(), point.y());
-                }
+        let mut has_moved = false;
+        for point in edges.exterior().points_iter() {
+            if !has_moved {
+                has_moved = true;
+                path.push_move_to(point.x(), point.y());
+            } else {
+                path.push_line_to(point.x(), point.y());
             }
         }
         path.push_close_path();
@@ -357,5 +347,34 @@ mod tests {
                 vec![],
             )]),
         );
+    }
+
+    #[test]
+    fn test_atpos_xends() {
+        let mut panel = Panel::new();
+        panel.push(features::AtPos::x_ends(
+            features::Rect::with_center([4., 2.].into(), 2., 3.),
+            Some(features::Circle::wrap_with_radius(
+                features::ScrewHole::with_diameter(1.),
+                2.,
+            )),
+            Some(features::Circle::wrap_with_radius(
+                features::ScrewHole::with_diameter(1.),
+                2.,
+            )),
+        ));
+
+        for i in 0..5 {
+            assert!(panel.interior_geometry()[i].bounds().center().x < 3.01);
+            assert!(panel.interior_geometry()[i].bounds().center().x > 2.99);
+            assert!(panel.interior_geometry()[i].bounds().center().y < 2.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y > -2.01);
+        }
+        for i in 5..10 {
+            assert!(panel.interior_geometry()[i].bounds().center().x < 5.01);
+            assert!(panel.interior_geometry()[i].bounds().center().x > 4.99);
+            assert!(panel.interior_geometry()[i].bounds().center().y < 2.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y > -2.01);
+        }
     }
 }

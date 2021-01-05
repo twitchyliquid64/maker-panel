@@ -2,7 +2,7 @@
 
 use crate::InnerAtom;
 use conv::TryFrom;
-use geo::{MultiPolygon, Point};
+use geo::{Point, Polygon};
 use gerber_types::*;
 
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ fn gerber_prelude<'a>(
 }
 
 /// Serializes a representation of edge geometry in extender gerber format.
-pub fn serialize_edge(edges: MultiPolygon<f64>) -> Result<Vec<Command>, ()> {
+pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
     let cf = CoordinateFormat::new(4, 6);
     let mut commands = gerber_prelude(
         cf,
@@ -55,55 +55,53 @@ pub fn serialize_edge(edges: MultiPolygon<f64>) -> Result<Vec<Command>, ()> {
     );
     commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
 
-    for poly in edges {
-        let mut last: Option<Point<f64>> = None;
-        for point in poly.exterior().points_iter() {
-            if let Some(cmd) = match last {
-                None => FunctionCode::DCode(DCode::Operation(Operation::Move(Coordinates::new(
-                    CoordinateNumber::try_from(point.x()).unwrap(),
-                    CoordinateNumber::try_from(point.y()).unwrap(),
-                    cf,
-                ))))
-                .into(),
+    let mut last: Option<Point<f64>> = None;
+    for point in poly.exterior().points_iter() {
+        if let Some(cmd) = match last {
+            None => FunctionCode::DCode(DCode::Operation(Operation::Move(Coordinates::new(
+                CoordinateNumber::try_from(point.x()).unwrap(),
+                CoordinateNumber::try_from(point.y()).unwrap(),
+                cf,
+            ))))
+            .into(),
 
-                Some(last) => {
-                    let x = CoordinateNumber::try_from(point.x()).unwrap();
-                    let y = CoordinateNumber::try_from(point.y()).unwrap();
+            Some(last) => {
+                let x = CoordinateNumber::try_from(point.x()).unwrap();
+                let y = CoordinateNumber::try_from(point.y()).unwrap();
 
-                    match (
-                        ((last.x() - point.x()).abs() < 1.0E-6),
-                        ((last.y() - point.y()).abs() < 1.0E-6),
-                    ) {
-                        (true, true) => None,
-                        (_, true) => Some(
-                            FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                                Coordinates::at_y(y, cf),
-                                None,
-                            )))
-                            .into(),
-                        ),
-                        (true, _) => Some(
-                            FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                                Coordinates::at_x(x, cf),
-                                None,
-                            )))
-                            .into(),
-                        ),
-                        (_, _) => Some(
-                            FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                                Coordinates::new(x, y, cf),
-                                None,
-                            )))
-                            .into(),
-                        ),
-                    }
+                match (
+                    ((last.x() - point.x()).abs() < 1.0E-6),
+                    ((last.y() - point.y()).abs() < 1.0E-6),
+                ) {
+                    (true, true) => None,
+                    (_, true) => Some(
+                        FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                            Coordinates::at_y(y, cf),
+                            None,
+                        )))
+                        .into(),
+                    ),
+                    (true, _) => Some(
+                        FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                            Coordinates::at_x(x, cf),
+                            None,
+                        )))
+                        .into(),
+                    ),
+                    (_, _) => Some(
+                        FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                            Coordinates::new(x, y, cf),
+                            None,
+                        )))
+                        .into(),
+                    ),
                 }
-            } {
-                commands.push(gerber_types::Command::FunctionCode(cmd));
             }
-
-            last = Some(point.clone());
+        } {
+            commands.push(gerber_types::Command::FunctionCode(cmd));
         }
+
+        last = Some(point.clone());
     }
 
     commands.push(FunctionCode::MCode(MCode::EndOfFile).into());
