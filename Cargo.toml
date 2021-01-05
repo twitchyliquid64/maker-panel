@@ -2,7 +2,7 @@
 name = "maker-panel"
 description = "Generator for modular mechanical panels"
 license = "MIT"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Tom <twitchyliquid64@ciphersink.net>"]
 edition = "2018"
 
@@ -17,3 +17,5 @@ usvg = "0.12"
 resvg = "0.12"
 gerber-types = { git = "https://github.com/dbrgn/gerber-types-rs", rev = "68c26196d9a2a97e5e29c56c9d7e3d82a52220da" }
 # gerber = { git = "https://github.com/dbrgn/gerber-rs", rev = "9260e13e66a7946bad100bf07f2f5975a0f82f69" }
+
+structopt = "0.3"

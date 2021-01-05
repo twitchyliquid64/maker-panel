@@ -9,7 +9,7 @@ use usvg::NodeExt;
 pub mod features;
 use features::{Feature, InnerAtom};
 
-pub mod gerber;
+mod gerber;
 
 /// Alignment of multiple elements in an array.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,7 +20,7 @@ pub enum Align {
 }
 
 /// PCB layers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Layer {
     FrontCopper,
     FrontMask,
@@ -162,6 +162,7 @@ impl<'a> Panel<'a> {
             .collect()
     }
 
+    /// Serializes a gerber file describing the PCB profile to the provided writer.
     pub fn serialize_gerber_edges<W: std::io::Write>(&self, w: &mut W) -> Result<(), Err> {
         let edges = match self.edge_geometry() {
             Some(edges) => edges,
@@ -178,6 +179,19 @@ impl<'a> Panel<'a> {
         }
 
         let commands = gerber::serialize_edge(edges).unwrap();
+        use gerber_types::GerberCode;
+        commands.serialize(w).unwrap();
+        Ok(())
+    }
+
+    /// Serializes a gerber file describing the layer (copper or soldermask) to
+    /// to the provided writer.
+    pub fn serialize_gerber_layer<W: std::io::Write>(
+        &self,
+        layer: Layer,
+        w: &mut W,
+    ) -> Result<(), Err> {
+        let commands = gerber::serialize_layer(layer, self.interior_geometry()).unwrap();
         use gerber_types::GerberCode;
         commands.serialize(w).unwrap();
         Ok(())

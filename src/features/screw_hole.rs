@@ -16,7 +16,7 @@ impl ScrewHole {
     pub fn with_diameter(dia: f64) -> Self {
         Self {
             drill_radius: dia / 2.0,
-            annular_ring_radius: (dia / 2.0) + 0.3,
+            annular_ring_radius: (dia / 2.0) + 0.05,
             ..Self::default()
         }
     }
@@ -26,8 +26,8 @@ impl Default for ScrewHole {
     fn default() -> Self {
         Self {
             center: [0., 0.].into(),
-            drill_radius: 1.5,
-            annular_ring_radius: 1.8,
+            drill_radius: 1.55,
+            annular_ring_radius: 1.55,
         }
     }
 }
