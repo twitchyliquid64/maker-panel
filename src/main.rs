@@ -95,7 +95,7 @@ impl Fmt {
                 zip.finish().map_err(|e| Err::Zip(e))?;
 
                 drop(zip);
-                w.write(&cursor.into_inner());
+                w.write(&cursor.into_inner()).map_err(|e| Err::IO(e))?;
                 Ok(())
             }
         }

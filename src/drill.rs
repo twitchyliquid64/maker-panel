@@ -17,7 +17,7 @@ pub fn serialize<W: std::io::Write>(
     let mut circle_dia = HashMap::new();
     for f in features {
         if let InnerAtom::Drill {
-            center,
+            center: _,
             radius,
             plated,
         } = f
