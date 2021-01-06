@@ -7,7 +7,9 @@ use structopt::StructOpt;
 
 #[derive(Debug)]
 enum Err {
+    IO(std::io::Error),
     General(maker_panel::Err),
+    Zip(zip::result::ZipError),
 }
 
 /// Represents an output format provided for the gen command.
@@ -20,9 +22,22 @@ pub enum Fmt {
     BackCopper,
     BackMask,
     BackLegend,
+    Zip,
 }
 
 impl Fmt {
+    fn all_formats() -> &'static [Fmt] {
+        &[
+            Fmt::Edge,
+            Fmt::FrontCopper,
+            Fmt::FrontMask,
+            Fmt::FrontLegend,
+            Fmt::BackCopper,
+            Fmt::BackMask,
+            Fmt::BackLegend,
+        ]
+    }
+
     fn file_suffix(&self) -> &'static str {
         match self {
             Fmt::Edge => "Edge.Cuts.gm1",
@@ -32,10 +47,11 @@ impl Fmt {
             Fmt::BackCopper => "B.Cu.gbl",
             Fmt::BackMask => "B.Mask.gbs",
             Fmt::BackLegend => "B.SilkS.gto",
+            Fmt::Zip => "gerbers.zip",
         }
     }
 
-    fn serialize_to(&self, panel: Panel, w: &mut impl std::io::Write) -> Result<(), Err> {
+    fn serialize_to(&self, panel: &Panel, w: &mut impl std::io::Write) -> Result<(), Err> {
         match self {
             Fmt::Edge => panel.serialize_gerber_edges(w),
             Fmt::FrontCopper => panel.serialize_gerber_layer(Layer::FrontCopper, w),
@@ -44,6 +60,24 @@ impl Fmt {
             Fmt::BackCopper => panel.serialize_gerber_layer(Layer::BackCopper, w),
             Fmt::BackMask => panel.serialize_gerber_layer(Layer::BackMask, w),
             Fmt::BackLegend => panel.serialize_gerber_layer(Layer::BackLegend, w),
+            Fmt::Zip => {
+                let mut cursor = std::io::Cursor::new(Vec::with_capacity(4 * 1024));
+                let mut zip = zip::ZipWriter::new(&mut cursor);
+                let options = zip::write::FileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored)
+                    .unix_permissions(0o755);
+
+                for fmt in Fmt::all_formats() {
+                    zip.start_file(fmt.file_suffix(), options)
+                        .map_err(|e| Err::Zip(e))?;
+                    fmt.serialize_to(panel, &mut zip)?;
+                }
+                zip.finish().map_err(|e| Err::Zip(e))?;
+
+                drop(zip);
+                w.write(&cursor.into_inner());
+                Ok(())
+            }
         }
         .map_err(|e| Err::General(e))
     }
@@ -61,6 +95,7 @@ impl std::str::FromStr for Fmt {
             "b.cu" => Ok(Fmt::BackCopper),
             "b.mask" => Ok(Fmt::BackMask),
             "b.legend" => Ok(Fmt::BackLegend),
+            "zip" | "all" => Ok(Fmt::Zip),
             _ => Err(format!("no such fmt: {}", s).to_string()),
         }
     }
@@ -109,7 +144,24 @@ pub enum Cmd {
         output: PathBuf,
     },
     #[structopt(name = "gen", about = "Generates CAD files.")]
-    Gen { fmt: Fmt },
+    Gen {
+        #[structopt(
+            name = "fmt",
+            short = "f",
+            long = "fmt",
+            about = "Specifies what output format to generate",
+            default_value = "zip"
+        )]
+        fmt: Fmt,
+
+        #[structopt(
+            name = "output",
+            short = "o",
+            long = "output",
+            about = "File path where the generated output should be written"
+        )]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, StructOpt, Clone)]
@@ -171,6 +223,13 @@ fn run_cmd(args: Opt, panel: Panel) -> Result<(), Err> {
                 .unwrap();
             Ok(())
         }
-        Cmd::Gen { fmt } => fmt.serialize_to(panel, &mut stdout),
+        Cmd::Gen { fmt, output: None } => fmt.serialize_to(&panel, &mut stdout),
+        Cmd::Gen {
+            fmt,
+            output: Some(p),
+        } => {
+            let mut file = std::fs::File::create(&p).map_err(|e| Err::IO(e))?;
+            fmt.serialize_to(&panel, &mut file)
+        }
     }
 }
