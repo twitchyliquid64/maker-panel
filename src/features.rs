@@ -56,6 +56,7 @@ pub enum InnerAtom {
     Drill {
         center: Coordinate<f64>,
         radius: f64,
+        plated: bool,
     },
     Circle {
         center: Coordinate<f64>,
@@ -92,7 +93,7 @@ impl InnerAtom {
 
     pub fn bounds(&self) -> geo::Rect<f64> {
         match self {
-            InnerAtom::Drill { center, radius } => geo::Rect::new(
+            InnerAtom::Drill { center, radius, .. } => geo::Rect::new(
                 Coordinate {
                     x: center.x - radius,
                     y: center.y - radius,

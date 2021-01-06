@@ -76,6 +76,7 @@ impl super::InnerFeature for ScrewHole {
             InnerAtom::Drill {
                 center: self.center,
                 radius: self.drill_radius,
+                plated: true,
             },
         ]
     }

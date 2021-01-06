@@ -9,6 +9,7 @@ use usvg::NodeExt;
 pub mod features;
 use features::{Feature, InnerAtom};
 
+mod drill;
 mod gerber;
 
 /// Alignment of multiple elements in an array.
@@ -206,6 +207,15 @@ impl<'a> Panel<'a> {
         commands
             .serialize(w)
             .map_err(|_| Err::InternalGerberFailure)
+    }
+
+    /// Serializes a drill file describing drill hits to the provided writer.
+    pub fn serialize_drill<W: std::io::Write>(
+        &self,
+        w: &mut W,
+        want_plated: bool,
+    ) -> Result<(), std::io::Error> {
+        drill::serialize(&self.interior_geometry(), w, want_plated)
     }
 
     /// Produces an SVG tree rendering the panel.

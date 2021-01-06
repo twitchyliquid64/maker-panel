@@ -22,6 +22,8 @@ pub enum Fmt {
     BackCopper,
     BackMask,
     BackLegend,
+    PlatedDrill,
+    NonPlatedDrill,
     Zip,
 }
 
@@ -35,6 +37,8 @@ impl Fmt {
             Fmt::BackCopper,
             Fmt::BackMask,
             Fmt::BackLegend,
+            Fmt::PlatedDrill,
+            Fmt::NonPlatedDrill,
         ]
     }
 
@@ -47,19 +51,35 @@ impl Fmt {
             Fmt::BackCopper => "B.Cu.gbl",
             Fmt::BackMask => "B.Mask.gbs",
             Fmt::BackLegend => "B.SilkS.gto",
+            Fmt::PlatedDrill => "PTH.drl",
+            Fmt::NonPlatedDrill => "NPTH.drl",
             Fmt::Zip => "gerbers.zip",
         }
     }
 
     fn serialize_to(&self, panel: &Panel, w: &mut impl std::io::Write) -> Result<(), Err> {
         match self {
-            Fmt::Edge => panel.serialize_gerber_edges(w),
-            Fmt::FrontCopper => panel.serialize_gerber_layer(Layer::FrontCopper, w),
-            Fmt::FrontMask => panel.serialize_gerber_layer(Layer::FrontMask, w),
-            Fmt::FrontLegend => panel.serialize_gerber_layer(Layer::FrontLegend, w),
-            Fmt::BackCopper => panel.serialize_gerber_layer(Layer::BackCopper, w),
-            Fmt::BackMask => panel.serialize_gerber_layer(Layer::BackMask, w),
-            Fmt::BackLegend => panel.serialize_gerber_layer(Layer::BackLegend, w),
+            Fmt::Edge => panel.serialize_gerber_edges(w).map_err(|e| Err::General(e)),
+            Fmt::FrontCopper => panel
+                .serialize_gerber_layer(Layer::FrontCopper, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::FrontMask => panel
+                .serialize_gerber_layer(Layer::FrontMask, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::FrontLegend => panel
+                .serialize_gerber_layer(Layer::FrontLegend, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::BackCopper => panel
+                .serialize_gerber_layer(Layer::BackCopper, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::BackMask => panel
+                .serialize_gerber_layer(Layer::BackMask, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::BackLegend => panel
+                .serialize_gerber_layer(Layer::BackLegend, w)
+                .map_err(|e| Err::General(e)),
+            Fmt::PlatedDrill => panel.serialize_drill(w, true).map_err(|e| Err::IO(e)),
+            Fmt::NonPlatedDrill => panel.serialize_drill(w, false).map_err(|e| Err::IO(e)),
             Fmt::Zip => {
                 let mut cursor = std::io::Cursor::new(Vec::with_capacity(4 * 1024));
                 let mut zip = zip::ZipWriter::new(&mut cursor);
@@ -79,7 +99,6 @@ impl Fmt {
                 Ok(())
             }
         }
-        .map_err(|e| Err::General(e))
     }
 }
 
@@ -95,6 +114,8 @@ impl std::str::FromStr for Fmt {
             "b.cu" => Ok(Fmt::BackCopper),
             "b.mask" => Ok(Fmt::BackMask),
             "b.legend" => Ok(Fmt::BackLegend),
+            "drl" | "pdrl" => Ok(Fmt::PlatedDrill),
+            "ndrl" | "npdrl" => Ok(Fmt::NonPlatedDrill),
             "zip" | "all" => Ok(Fmt::Zip),
             _ => Err(format!("no such fmt: {}", s).to_string()),
         }
