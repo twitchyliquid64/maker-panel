@@ -1,9 +1,14 @@
 use maker_panel::{
     features::{repeating, AtPos, Circle, Column, Rect, ScrewHole},
-    Direction, Err, Layer, Panel,
+    Direction, Layer, Panel,
 };
 use std::path::PathBuf;
 use structopt::StructOpt;
+
+#[derive(Debug)]
+enum Err {
+    General(maker_panel::Err),
+}
 
 /// Represents an output format provided for the gen command.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +33,19 @@ impl Fmt {
             Fmt::BackMask => "B.Mask.gbs",
             Fmt::BackLegend => "B.SilkS.gto",
         }
+    }
+
+    fn serialize_to(&self, panel: Panel, w: &mut impl std::io::Write) -> Result<(), Err> {
+        match self {
+            Fmt::Edge => panel.serialize_gerber_edges(w),
+            Fmt::FrontCopper => panel.serialize_gerber_layer(Layer::FrontCopper, w),
+            Fmt::FrontMask => panel.serialize_gerber_layer(Layer::FrontMask, w),
+            Fmt::FrontLegend => panel.serialize_gerber_layer(Layer::FrontLegend, w),
+            Fmt::BackCopper => panel.serialize_gerber_layer(Layer::BackCopper, w),
+            Fmt::BackMask => panel.serialize_gerber_layer(Layer::BackMask, w),
+            Fmt::BackLegend => panel.serialize_gerber_layer(Layer::BackLegend, w),
+        }
+        .map_err(|e| Err::General(e))
     }
 }
 
@@ -134,10 +152,13 @@ fn main() {
     // panel.push(Circle::new([0., 7.5].into(), 7.5));
     // panel.push(Circle::new([20., 7.5].into(), 7.5));
 
-    run_cmd(args, panel);
+    if let Err(e) = run_cmd(args, panel) {
+        eprintln!("Error: {:?}", e);
+        std::process::exit(1);
+    };
 }
 
-fn run_cmd(args: Opt, panel: Panel) {
+fn run_cmd(args: Opt, panel: Panel) -> Result<(), Err> {
     let mut stdout = std::io::stdout();
 
     match args.cmd {
@@ -148,27 +169,8 @@ fn run_cmd(args: Opt, panel: Panel) {
                 .unwrap()
                 .save_png(output)
                 .unwrap();
+            Ok(())
         }
-        Cmd::Gen { fmt } => match fmt {
-            Fmt::Edge => panel.serialize_gerber_edges(&mut stdout).unwrap(),
-            Fmt::FrontCopper => panel
-                .serialize_gerber_layer(Layer::FrontCopper, &mut stdout)
-                .unwrap(),
-            Fmt::FrontMask => panel
-                .serialize_gerber_layer(Layer::FrontMask, &mut stdout)
-                .unwrap(),
-            Fmt::FrontLegend => panel
-                .serialize_gerber_layer(Layer::FrontLegend, &mut stdout)
-                .unwrap(),
-            Fmt::BackCopper => panel
-                .serialize_gerber_layer(Layer::BackCopper, &mut stdout)
-                .unwrap(),
-            Fmt::BackMask => panel
-                .serialize_gerber_layer(Layer::BackMask, &mut stdout)
-                .unwrap(),
-            Fmt::BackLegend => panel
-                .serialize_gerber_layer(Layer::BackLegend, &mut stdout)
-                .unwrap(),
-        },
-    };
+        Cmd::Gen { fmt } => fmt.serialize_to(panel, &mut stdout),
+    }
 }

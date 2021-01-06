@@ -6,8 +6,6 @@ version = "0.3.1"
 authors = ["Tom <twitchyliquid64@ciphersink.net>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 conv = "0.3"
 typenum = "1.12"
@@ -15,7 +13,7 @@ geo-booleanop = "0.3.2"
 geo = "0.16"
 usvg = "0.12"
 resvg = "0.12"
-gerber-types = { git = "https://github.com/dbrgn/gerber-types-rs", rev = "68c26196d9a2a97e5e29c56c9d7e3d82a52220da" }
+gerber-types = { git = "https://github.com/twitchyliquid64/gerber-types-rs", rev = "e927ed2ff68d9e8629dbc36d5f1e5626da472376" }
 # gerber = { git = "https://github.com/dbrgn/gerber-rs", rev = "9260e13e66a7946bad100bf07f2f5975a0f82f69" }
 
 structopt = "0.3"

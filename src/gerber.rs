@@ -192,9 +192,6 @@ pub fn serialize_layer(
                 pos: Position::Bottom,
                 index: None,
             },
-            _ => {
-                return Err(());
-            }
         },
         dias.iter(),
     );

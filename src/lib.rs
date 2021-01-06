@@ -79,6 +79,7 @@ impl Direction {
 pub enum Err {
     NoFeatures,
     BadEdgeGeometry(String),
+    InternalGerberFailure,
 }
 
 /// Combines features into single geometry.
@@ -157,6 +158,22 @@ impl<'a> Panel<'a> {
         }
     }
 
+    fn edge_poly(&self) -> Result<geo::Polygon<f64>, Err> {
+        match self.edge_geometry() {
+            Some(edges) => {
+                let mut polys = edges.into_iter();
+                match polys.len() {
+                    0 => Err(Err::NoFeatures),
+                    1 => Ok(polys.next().unwrap()),
+                    _ => Err(Err::BadEdgeGeometry(
+                        "multiple polygons provided for edge geometry".to_string(),
+                    )),
+                }
+            }
+            None => Err(Err::NoFeatures),
+        }
+    }
+
     /// Computes the inner geometry of the panel.
     pub fn interior_geometry(&self) -> Vec<InnerAtom> {
         self.features
@@ -166,31 +183,14 @@ impl<'a> Panel<'a> {
             .collect()
     }
 
-    fn edge_poly(&self) -> Result<geo::Polygon<f64>, Err> {
-        let edges = match self.edge_geometry() {
-            Some(edges) => edges,
-            None => {
-                return Err(Err::NoFeatures);
-            }
-        };
-
-        let mut polys = edges.into_iter();
-        match polys.len() {
-            0 => Err(Err::NoFeatures),
-            1 => Ok(polys.next().unwrap()),
-            _ => Err(Err::BadEdgeGeometry(
-                "multiple polygons provided for edge geometry".to_string(),
-            )),
-        }
-    }
-
     /// Serializes a gerber file describing the PCB profile to the provided writer.
     pub fn serialize_gerber_edges<W: std::io::Write>(&self, w: &mut W) -> Result<(), Err> {
         let edges = self.edge_poly()?;
-        let commands = gerber::serialize_edge(edges).unwrap();
+        let commands = gerber::serialize_edge(edges).map_err(|_| Err::InternalGerberFailure)?;
         use gerber_types::GerberCode;
-        commands.serialize(w).unwrap();
-        Ok(())
+        commands
+            .serialize(w)
+            .map_err(|_| Err::InternalGerberFailure)
     }
 
     /// Serializes a gerber file describing the layer (copper or soldermask) to
@@ -200,10 +200,12 @@ impl<'a> Panel<'a> {
         layer: Layer,
         w: &mut W,
     ) -> Result<(), Err> {
-        let commands = gerber::serialize_layer(layer, self.interior_geometry()).unwrap();
+        let commands = gerber::serialize_layer(layer, self.interior_geometry())
+            .map_err(|_| Err::InternalGerberFailure)?;
         use gerber_types::GerberCode;
-        commands.serialize(w).unwrap();
-        Ok(())
+        commands
+            .serialize(w)
+            .map_err(|_| Err::InternalGerberFailure)
     }
 
     /// Produces an SVG tree rendering the panel.

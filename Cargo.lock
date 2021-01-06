@@ -296,7 +296,7 @@ dependencies = [
 [[package]]
 name = "gerber-types"
 version = "0.1.1"
-source = "git+https://github.com/dbrgn/gerber-types-rs?rev=68c26196d9a2a97e5e29c56c9d7e3d82a52220da#68c26196d9a2a97e5e29c56c9d7e3d82a52220da"
+source = "git+https://github.com/twitchyliquid64/gerber-types-rs?rev=e927ed2ff68d9e8629dbc36d5f1e5626da472376#e927ed2ff68d9e8629dbc36d5f1e5626da472376"
 dependencies = [
  "chrono",
  "conv",
