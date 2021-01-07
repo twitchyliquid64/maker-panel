@@ -11,6 +11,7 @@ use features::{Feature, InnerAtom};
 
 mod drill;
 mod gerber;
+mod parser;
 
 /// Alignment of multiple elements in an array.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -17,3 +17,4 @@ gerber-types = "0.2"
 #{ git = "https://github.com/twitchyliquid64/gerber-types-rs", rev = "e927ed2ff68d9e8629dbc36d5f1e5626da472376" }
 structopt = "0.3"
 zip = { version = "0.5", default-features = false }
+nom = { version = "6", default-features = false, features = ["alloc"] }
