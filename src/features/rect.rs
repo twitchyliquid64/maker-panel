@@ -41,15 +41,42 @@ impl<U: super::InnerFeature> Rect<U> {
     /// Constructs a rectangle surrounding the inner feature. The
     /// origin of the inner feature will match the centeroid of the
     /// rectangle.
-    pub fn with_inner(
-        mut inner: U,
-        top_left: Coordinate<f64>,
-        bottom_right: Coordinate<f64>,
-    ) -> Self {
-        let rect = geo::Rect::new(top_left, bottom_right);
-        inner.translate(rect.center());
-
+    pub fn with_inner(inner: U) -> Self {
+        let tl: Coordinate<f64> = [-1f64, -1f64].into();
+        let br: Coordinate<f64> = [1f64, 1f64].into();
+        let rect = geo::Rect::new(tl, br);
         Self { rect, inner }
+    }
+
+    /// Returns a new rectangle around the provided center.
+    pub fn dimensions(mut self, center: Coordinate<f64>, width: f64, height: f64) -> Self {
+        let rect = geo::Rect::new(
+            center
+                + Coordinate {
+                    x: -width / 2.,
+                    y: -height / 2.,
+                },
+            center
+                + Coordinate {
+                    x: width / 2.,
+                    y: height / 2.,
+                },
+        );
+        self.inner.translate(center);
+        Self {
+            rect,
+            inner: self.inner,
+        }
+    }
+
+    /// Returns a new rectangle using the provided bounds.
+    pub fn bounds(mut self, top_left: Coordinate<f64>, bottom_right: Coordinate<f64>) -> Self {
+        let rect = geo::Rect::new(top_left, bottom_right);
+        self.inner.translate(rect.center());
+        Self {
+            rect,
+            inner: self.inner,
+        }
     }
 }
 

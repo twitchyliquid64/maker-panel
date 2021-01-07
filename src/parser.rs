@@ -1,20 +1,37 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while};
 use nom::character::complete::multispace0;
-use nom::combinator::opt;
+use nom::combinator::{map, opt};
 use nom::multi::{fold_many1, many0};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
+
+#[derive(Debug, Clone)]
+pub enum InnerAST {
+    ScrewHole(f64),
+}
+
+impl InnerAST {
+    fn into_inner_feature<'a>(self) -> Box<dyn super::features::InnerFeature + 'a> {
+        use super::features::ScrewHole;
+
+        match self {
+            InnerAST::ScrewHole(dia) => Box::new(ScrewHole::with_diameter(dia)),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum AST {
     Rect {
         coords: Option<(f64, f64)>,
         size: Option<(f64, f64)>,
+        inner: Option<InnerAST>,
     },
     Circle {
         coords: Option<(f64, f64)>,
         radius: f64,
+        inner: Option<InnerAST>,
     },
 }
 
@@ -23,15 +40,46 @@ impl AST {
         use super::features::{Circle, Rect};
 
         match self {
-            AST::Rect { coords, size } => match (coords, size) {
-                (Some(c), Some(s)) => Box::new(Rect::with_center(c.into(), s.0, s.1)),
-                (None, Some(s)) => Box::new(Rect::with_center([0., 0.].into(), s.0, s.1)),
-                (Some(c), None) => Box::new(Rect::with_center(c.into(), 5., 5.)),
-                (None, None) => Box::new(Rect::with_center([0., 0.].into(), 5., 5.)),
-            },
-            AST::Circle { coords, radius } => match coords {
-                Some(c) => Box::new(Circle::new(c.into(), radius)),
-                None => Box::new(Circle::with_radius(radius)),
+            AST::Rect {
+                coords,
+                size,
+                inner,
+            } => {
+                if let Some(inner) = inner {
+                    let r = Rect::with_inner(inner.into_inner_feature());
+                    let (w, h) = if let Some((w, h)) = size {
+                        (w, h)
+                    } else {
+                        (2., 2.)
+                    };
+                    let r = if let Some(coords) = coords {
+                        r.dimensions(coords.into(), w, h)
+                    } else {
+                        r.dimensions([0., 0.].into(), w, h)
+                    };
+                    Box::new(r)
+                } else {
+                    Box::new(match (coords, size) {
+                        (Some(c), Some(s)) => Rect::with_center(c.into(), s.0, s.1),
+                        (None, Some(s)) => Rect::with_center([0., 0.].into(), s.0, s.1),
+                        (Some(c), None) => Rect::with_center(c.into(), 2., 2.),
+                        (None, None) => Rect::with_center([-1f64, -1f64].into(), 2., 2.),
+                    })
+                }
+            }
+            AST::Circle {
+                coords,
+                radius,
+                inner,
+            } => match (inner, coords) {
+                (Some(i), Some(c)) => {
+                    Box::new(Circle::with_inner(i.into_inner_feature(), c.into(), radius))
+                }
+                (Some(i), None) => {
+                    Box::new(Circle::wrap_with_radius(i.into_inner_feature(), radius))
+                }
+                (None, Some(c)) => Box::new(Circle::new(c.into(), radius)),
+                (None, None) => Box::new(Circle::with_radius(radius)),
             },
         }
     }
@@ -60,6 +108,23 @@ fn parse_coords(i: &str) -> IResult<&str, (f64, f64)> {
     Ok((i, (x, y)))
 }
 
+fn parse_inner(i: &str) -> IResult<&str, InnerAST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, inner) = delimited(
+        tuple((tag("("), multispace0)),
+        alt((
+            map(tuple((tag("h"), parse_float)), |(_, f)| {
+                InnerAST::ScrewHole(f)
+            }),
+            map(tag("h"), |_| InnerAST::ScrewHole(3.1)),
+        )),
+        tuple((multispace0, tag(")"))),
+    )(i)?;
+
+    Ok((i, inner))
+}
+
 enum DetailFragment {
     Coord(f64, f64),
     Size(f64, f64),
@@ -73,6 +138,7 @@ struct Details {
     size: Option<(f64, f64)>,
     radius: Option<f64>,
     extra: Vec<f64>,
+    inner: Option<InnerAST>,
 }
 
 impl Details {
@@ -108,6 +174,11 @@ impl Details {
         ))(i)?;
         Ok((i, DetailFragment::Radius(r)))
     }
+
+    fn with_inner(mut self, inner: Option<InnerAST>) -> Self {
+        self.inner = inner;
+        self
+    }
 }
 
 fn parse_details(i: &str) -> IResult<&str, Details> {
@@ -142,7 +213,8 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
         tuple((tag(">"), multispace0)),
     )(i)?;
 
-    Ok((i, deets))
+    let (i, inner) = opt(parse_inner)(i)?;
+    Ok((i, deets.with_inner(inner)))
 }
 
 fn parse_rect(i: &str) -> IResult<&str, AST> {
@@ -164,6 +236,7 @@ fn parse_rect(i: &str) -> IResult<&str, AST> {
         AST::Rect {
             size,
             coords: deets.coords,
+            inner: deets.inner,
         },
     ))
 }
@@ -188,6 +261,7 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
         AST::Circle {
             coords: deets.coords,
             radius: r,
+            inner: deets.inner,
         },
     ))
 }
@@ -215,14 +289,14 @@ mod tests {
     fn test_rect() {
         let out = parse_geo("R<@(1,2)>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: None })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: None, inner: _ })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01
             )
         );
 
         let out = parse_geo("R<@(1,2), 2, 4>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)) })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 1.99 && w < 2.01 && h > 3.99 && h < 4.01
             )
@@ -230,17 +304,32 @@ mod tests {
 
         let out = parse_geo("R<@(1,2), 4>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)) })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
+                w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
+            )
+        );
+
+        let out = parse_geo("R<4>");
+        assert!(
+            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: _ })) if
                 w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
             )
         );
 
         let out = parse_geo("R<@(1,2), size = (2,4)>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)) })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 1.99 && w < 2.01 && h > 3.99 && h < 4.01
+            )
+        );
+
+        let out = parse_geo("R<6>(h)");
+        assert!(
+            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: Some(InnerAST::ScrewHole(dia)) })) if
+                w > 5.99 && w < 6.01 && h > 5.99 && h < 6.01 &&
+                dia < 3.11 && dia > 3.09
             )
         );
     }
@@ -249,7 +338,7 @@ mod tests {
     fn test_circle() {
         let out = parse_geo("C < @ ( 2 , 1 ), 4.5>");
         assert!(
-            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r })) if
+            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r, inner: _ })) if
                 c.1 > 0.99 && c.1 < 1.01 && c.0 > 1.99 && c.0 < 2.01 &&
                 r > 4.49 && r < 4.51
             )
@@ -257,17 +346,30 @@ mod tests {
 
         let out = parse_geo("C<@(2, 1), 3.5>");
         assert!(
-            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r })) if
+            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r, inner: _ })) if
                 c.1 > 0.99 && c.1 < 1.01 && c.0 > 1.99 && c.0 < 2.01 &&
+                r > 3.49 && r < 3.51
+            )
+        );
+        let out = parse_geo("C<3.5>");
+        assert!(
+            matches!(out, Ok(("", AST::Circle{ coords: None, radius: r, inner: _ })) if
                 r > 3.49 && r < 3.51
             )
         );
 
         let out = parse_geo("C<@(2, 1), R=3.5>");
         assert!(
-            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r })) if
+            matches!(out, Ok(("", AST::Circle{ coords: Some(c), radius: r, inner: _ })) if
                 c.1 > 0.99 && c.1 < 1.01 && c.0 > 1.99 && c.0 < 2.01 &&
                 r > 3.49 && r < 3.51
+            )
+        );
+
+        let out = parse_geo("C<3.5> ( h9 )");
+        assert!(
+            matches!(out, Ok(("", AST::Circle{ coords: None, radius: r, inner: Some(InnerAST::ScrewHole(dia)) })) if
+                r > 3.49 && r < 3.51 && dia > 8.999 && dia < 9.001
             )
         );
     }

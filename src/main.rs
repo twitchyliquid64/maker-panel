@@ -204,17 +204,17 @@ fn main() {
     panel.push(AtPos::x_ends(
         Column::align_center(vec![
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
                 Direction::Right,
                 8,
             ),
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
                 Direction::Right,
                 5,
             ),
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
                 Direction::Right,
                 8,
             ),

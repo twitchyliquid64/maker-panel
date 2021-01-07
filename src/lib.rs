@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn test_overlapping_rects() {
         let mut panel = Panel::new();
-        panel.push_spec("R<@(-2.5, -2.5), 5>").unwrap();
+        panel.push_spec("R<@(-2.5, -2.5), 5>(h3)").unwrap();
         panel.push(features::Rect::new([-0., -1.].into(), [5., 3.].into()));
 
         assert_eq!(
@@ -370,6 +370,43 @@ mod tests {
                 vec![],
             )]),
         );
+    }
+
+    #[test]
+    fn test_rect_inner() {
+        let mut panel = Panel::new();
+        panel.push_spec("R<@(2.5, -2.5), 5>(h3)").unwrap();
+
+        // eprintln!("{:?}", panel.interior_geometry());
+        for i in 0..5 {
+            assert!(panel.interior_geometry()[i].bounds().center().x > 2.49);
+            assert!(panel.interior_geometry()[i].bounds().center().x < 2.51);
+            assert!(panel.interior_geometry()[i].bounds().center().y < -2.49);
+            assert!(panel.interior_geometry()[i].bounds().center().y > -2.51);
+        }
+    }
+
+    #[test]
+    fn test_circ_inner() {
+        let mut panel = Panel::new();
+        panel.push_spec("C<5>(h2)").unwrap();
+
+        for i in 0..5 {
+            assert!(panel.interior_geometry()[i].bounds().center().x > -0.01);
+            assert!(panel.interior_geometry()[i].bounds().center().x < 0.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y < 0.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y > -0.01);
+        }
+
+        let mut panel = Panel::new();
+        panel.push_spec("C<@(1, 1), 1>(h2)").unwrap();
+        // eprintln!("{:?}", panel.interior_geometry());
+        for i in 0..5 {
+            assert!(panel.interior_geometry()[i].bounds().center().x > 0.99);
+            assert!(panel.interior_geometry()[i].bounds().center().x < 1.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y < 1.01);
+            assert!(panel.interior_geometry()[i].bounds().center().y > 0.99);
+        }
     }
 
     #[test]
