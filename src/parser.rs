@@ -1,11 +1,8 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while};
-use nom::character::{
-    complete::{multispace0, none_of, one_of},
-    is_digit,
-};
+use nom::character::complete::multispace0;
 use nom::combinator::opt;
-use nom::multi::{fold_many1, many0, separated_list1};
+use nom::multi::{fold_many1, many0};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
 
@@ -21,9 +18,28 @@ pub enum AST {
     },
 }
 
+impl AST {
+    fn into_feature<'a>(self) -> Box<dyn super::Feature + 'a> {
+        use super::features::{Circle, Rect};
+
+        match self {
+            AST::Rect { coords, size } => match (coords, size) {
+                (Some(c), Some(s)) => Box::new(Rect::with_center(c.into(), s.0, s.1)),
+                (None, Some(s)) => Box::new(Rect::with_center([0., 0.].into(), s.0, s.1)),
+                (Some(c), None) => Box::new(Rect::with_center(c.into(), 5., 5.)),
+                (None, None) => Box::new(Rect::with_center([0., 0.].into(), 5., 5.)),
+            },
+            AST::Circle { coords, radius } => match coords {
+                Some(c) => Box::new(Circle::new(c.into(), radius)),
+                None => Box::new(Circle::with_radius(radius)),
+            },
+        }
+    }
+}
+
 fn parse_float(i: &str) -> IResult<&str, f64> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = take_while(|c| c == '.' || (c >= '0' && c <= '9'))(i)?;
+    let (i, s) = take_while(|c| c == '.' || c == '-' || (c >= '0' && c <= '9'))(i)?;
     Ok((
         i,
         s.parse().map_err(|_e| {
@@ -137,6 +153,8 @@ fn parse_rect(i: &str) -> IResult<&str, AST> {
         Some((x, y))
     } else if deets.extra.len() == 2 {
         Some((deets.extra[0], deets.extra[1]))
+    } else if deets.extra.len() == 1 {
+        Some((deets.extra[0], deets.extra[0]))
     } else {
         None
     };
@@ -174,8 +192,19 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-pub fn parse_geo(i: &str) -> IResult<&str, AST> {
+fn parse_geo(i: &str) -> IResult<&str, AST> {
     alt((parse_rect, parse_circle))(i)
+}
+
+/// Parses the provided panel spec and returns the series of features
+/// it represents.
+pub fn build<'a>(i: &str) -> Result<Vec<Box<dyn super::Feature + 'a>>, ()> {
+    Ok(many0(parse_geo)(i)
+        .map_err(|_e| ())?
+        .1
+        .into_iter()
+        .map(|g| g.into_feature())
+        .collect())
 }
 
 #[cfg(test)]
@@ -196,6 +225,14 @@ mod tests {
             matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)) })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 1.99 && w < 2.01 && h > 3.99 && h < 4.01
+            )
+        );
+
+        let out = parse_geo("R<@(1,2), 4>");
+        assert!(
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)) })) if
+                c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
+                w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
             )
         );
 

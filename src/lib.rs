@@ -122,6 +122,12 @@ impl<'a> Panel<'a> {
         self.features.push(Box::new(f));
     }
 
+    /// Adds the feature described by the given spec to the panel.
+    pub fn push_spec(&mut self, spec_str: &str) -> Result<(), ()> {
+        self.features.append(&mut parser::build(spec_str)?);
+        Ok(())
+    }
+
     /// Computes the outer geometry of the panel.
     pub fn edge_geometry(&self) -> Option<MultiPolygon<f64>> {
         let edge = self
@@ -344,7 +350,7 @@ mod tests {
     #[test]
     fn test_overlapping_rects() {
         let mut panel = Panel::new();
-        panel.push(features::Rect::with_center([-2.5, -2.5].into(), 5., 5.));
+        panel.push_spec("R<@(-2.5, -2.5), 5>").unwrap();
         panel.push(features::Rect::new([-0., -1.].into(), [5., 3.].into()));
 
         assert_eq!(

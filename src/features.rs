@@ -24,6 +24,20 @@ pub trait InnerFeature: fmt::Display {
     fn atoms(&self) -> Vec<InnerAtom>;
 }
 
+impl<'a> InnerFeature for Box<dyn InnerFeature + 'a> {
+    fn name(&self) -> &'static str {
+        self.as_ref().name()
+    }
+
+    fn translate(&mut self, v: Coordinate<f64>) {
+        self.as_mut().translate(v)
+    }
+
+    fn atoms(&self) -> Vec<InnerAtom> {
+        self.as_ref().atoms()
+    }
+}
+
 /// A top-level unit that makes up the geometry of the panel.
 pub trait Feature: fmt::Display {
     /// Human-readable name describing the construction.
@@ -47,6 +61,28 @@ pub trait Feature: fmt::Display {
     /// other features.
     fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
         None
+    }
+}
+
+impl<'a> Feature for Box<dyn Feature + 'a> {
+    fn name(&self) -> &'static str {
+        self.as_ref().name()
+    }
+
+    fn translate(&mut self, v: Coordinate<f64>) {
+        self.as_mut().translate(v)
+    }
+
+    fn edge_union(&self) -> Option<MultiPolygon<f64>> {
+        self.as_ref().edge_union()
+    }
+
+    fn interior(&self) -> Vec<InnerAtom> {
+        self.as_ref().interior()
+    }
+
+    fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
+        self.as_ref().edge_subtract()
     }
 }
 
