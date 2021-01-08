@@ -13,29 +13,32 @@ impl<U: super::Feature + fmt::Debug + Clone> Column<U> {
     /// Lays out the given features in an array going downwards, with
     /// their leftmost elements aligned.
     pub fn align_left(array: Vec<U>) -> Self {
-        let align = crate::Align::Start;
-        Self {
-            align,
-            array,
-            bbox: true,
-        }
+        Self::new(array, crate::Align::Start)
     }
 
     /// Lays out the given features in an array going downwards, with
     /// their rightmost elements aligned.``
     pub fn align_right(array: Vec<U>) -> Self {
-        let align = crate::Align::End;
-        Self {
-            align,
-            array,
-            bbox: true,
-        }
+        Self::new(array, crate::Align::End)
     }
 
     /// Lays out the given features in an array going downwards, with
     /// each element aligned to the center.
     pub fn align_center(array: Vec<U>) -> Self {
-        let align = crate::Align::Center;
+        Self::new(array, crate::Align::Center)
+    }
+
+    fn new(mut array: Vec<U>, align: crate::Align) -> Self {
+        // Position any containing geometry to exist entirely in positive
+        // (x>=0, y>=0) coordinate space.
+        for e in array.iter_mut() {
+            if let Some(b) = e.edge_union() {
+                use geo::bounding_rect::BoundingRect;
+                let v = b.bounding_rect().unwrap().min();
+                e.translate(-v);
+            }
+        }
+
         Self {
             align,
             array,
@@ -49,7 +52,7 @@ impl<U: super::Feature + fmt::Debug + Clone> Column<U> {
             .map(|f| match f.edge_union() {
                 Some(edge) => {
                     use geo::bounding_rect::BoundingRect;
-                    edge.clone().bounding_rect().unwrap()
+                    edge.bounding_rect().unwrap()
                 }
                 None => geo::Rect::new(
                     Coordinate::<f64> { x: 0., y: 0. },
@@ -180,5 +183,75 @@ impl<U: super::Feature + fmt::Debug + Clone> super::Feature for Column<U> {
             })
             .flatten()
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::Rect;
+    use test_case::test_case;
+
+    #[test]
+    fn bounds() {
+        let a = Column::align_left(vec![
+            Rect::with_center([0., 0.].into(), 2., 3.),
+            Rect::with_center([0., 0.].into(), 3., 2.),
+        ]);
+
+        assert_eq!(
+            a.all_bounds(),
+            vec![
+                geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [2., 3.].into()),
+                geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn largest() {
+        let a = Column::align_left(vec![
+            Rect::with_center([0., 0.].into(), 2., 3.),
+            Rect::with_center([0., 0.].into(), 3., 2.),
+        ]);
+
+        assert_eq!(
+            a.largest(),
+            geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into(),),
+        );
+    }
+
+    #[test_case(
+        vec![
+            Rect::with_center([0., 0.].into(), 4., 2.),
+            Rect::with_center([0., 0.].into(), 2., 2.),
+        ], vec![
+            Some((0., 0.)),
+            Some((0., 2.)),
+        ] ; "origin centered"
+    )
+    ]
+    fn translations_left(inners: Vec<Rect>, want: Vec<Option<(f64, f64)>>) {
+        let a = Column::align_left(inners);
+        assert_eq!(a.translations(a.largest()).collect::<Vec<_>>(), want,);
+    }
+
+    #[test_case( vec![
+        Rect::with_center([0., 0.].into(), 2., 2.),
+        Rect::with_center([0., 0.].into(), 4., 2.),
+    ], vec![
+        Some((1., 0.)),
+        Some((0., 2.)),
+    ] ; "origin centered")]
+    #[test_case( vec![
+        Rect::new([0., 0.].into(), [2., 3.].into()),
+        Rect::new([0., 0.].into(), [2., 2.].into()),
+    ], vec![
+        Some((0., 0.)),
+        Some((0., 3.)),
+    ] ; "origin tl zeroed")]
+    fn translations_center(inners: Vec<Rect>, want: Vec<Option<(f64, f64)>>) {
+        let a = Column::align_center(inners);
+        assert_eq!(a.translations(a.largest()).collect::<Vec<_>>(), want,);
     }
 }

@@ -387,6 +387,32 @@ mod tests {
     }
 
     #[test]
+    fn test_array_inner() {
+        let mut panel = Panel::new();
+        panel.push_spec("[5]R<5>(h3)").unwrap();
+        assert_eq!(panel.interior_geometry().len(), 25);
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        assert!(bounds.width() > 24.99 && bounds.width() < 25.01);
+        assert!(bounds.height() > 4.99 && bounds.height() < 5.01);
+    }
+
+    #[test]
+    fn test_layout_down() {
+        let mut panel = Panel::new();
+        panel
+            .push_spec("layout column left { R<5,5>(h) R<3>(h) } ")
+            .unwrap();
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 4.99 && bounds.width() < 5.01);
+        assert!(bounds.height() > 7.99 && bounds.height() < 8.01);
+    }
+
+    #[test]
     fn test_circ_inner() {
         let mut panel = Panel::new();
         panel.push_spec("C<5>(h2)").unwrap();
