@@ -8,7 +8,28 @@ Eventually you'll be able to specify very basic geometry (ie: screw holes repeat
 
 ## Examples
 
-This:
+This (using maker-panel expressions):
+
+```go
+x_wrap(
+    C<11.25>(h5),
+    layout column center {
+        [12] R<7.5>(h)
+        [ 9] R<7.5>(h)
+        [12] R<7.5>(h)
+    },
+    C<11.25>(h5),
+)
+```
+
+Makes this:
+
+<p align="center">
+  <img alt="Example 2" src="images/ex2.png" width="60%">
+</p>
+
+
+and this (in literal rust):
 
 ```rust
 let mut panel = Panel::new();
@@ -37,37 +58,4 @@ Makes this:
 
 <p align="center">
   <img alt="Example 1" src="images/ex1.png" width="60%">
-</p>
-
-And this:
-
-```rust
-let mut panel = Panel::new();
-panel.push(AtPos::x_ends(
-    Column::align_center(vec![
-        repeating::Tile::new(
-            Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
-            Direction::Right,
-            8,
-        ),
-        repeating::Tile::new(
-            Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
-            Direction::Right,
-            5,
-        ),
-        repeating::Tile::new(
-            Rect::with_inner(ScrewHole::default(), [0., 0.].into(), [5., 5.].into()),
-            Direction::Right,
-            8,
-        ),
-    ]),
-    Some(Circle::wrap_with_radius(ScrewHole::with_diameter(5.), 7.5)),
-    Some(Circle::wrap_with_radius(ScrewHole::with_diameter(5.), 7.5)),
-));
-```
-
-Makes this:
-
-<p align="center">
-  <img alt="Example 2" src="images/ex2.png" width="70%">
 </p>
