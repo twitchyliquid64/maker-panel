@@ -11,9 +11,9 @@ pub struct AtPos<U = super::Unit, L = super::Unit, R = super::Unit> {
 
 impl<U, L, R> AtPos<U, L, R>
 where
-    U: super::Feature + std::fmt::Debug,
-    L: super::Feature + std::fmt::Debug,
-    R: super::Feature + std::fmt::Debug,
+    U: super::Feature + std::fmt::Debug + Clone,
+    L: super::Feature + std::fmt::Debug + Clone,
+    R: super::Feature + std::fmt::Debug + Clone,
 {
     /// Constructs a feature that positions the centeroid of other
     /// features at the left & right points of the primary feature.
@@ -28,8 +28,8 @@ where
 
 impl<U, L> AtPos<U, L, super::Unit>
 where
-    U: super::Feature + std::fmt::Debug,
-    L: super::Feature + std::fmt::Debug,
+    U: super::Feature + std::fmt::Debug + Clone,
+    L: super::Feature + std::fmt::Debug + Clone,
 {
     /// Constructs a feature that positions the centeroid of the other
     /// feature to the left of the primary feature.
@@ -44,8 +44,8 @@ where
 
 impl<U, R> AtPos<U, super::Unit, R>
 where
-    U: super::Feature + std::fmt::Debug,
-    R: super::Feature + std::fmt::Debug,
+    U: super::Feature + std::fmt::Debug + Clone,
+    R: super::Feature + std::fmt::Debug + Clone,
 {
     /// Constructs a feature that positions the centeroid of the other
     /// feature to the right of the primary feature.
@@ -79,9 +79,9 @@ fn compute_right_translation(bounds: geo::Rect<f64>, rb: geo::Rect<f64>) -> (f64
 
 impl<U, L, R> fmt::Display for AtPos<U, L, R>
 where
-    U: super::Feature + std::fmt::Debug,
-    L: super::Feature + std::fmt::Debug,
-    R: super::Feature + std::fmt::Debug,
+    U: super::Feature + std::fmt::Debug + Clone,
+    L: super::Feature + std::fmt::Debug + Clone,
+    R: super::Feature + std::fmt::Debug + Clone,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -94,9 +94,9 @@ where
 
 impl<U, L, R> super::Feature for AtPos<U, L, R>
 where
-    U: super::Feature + std::fmt::Debug,
-    L: super::Feature + std::fmt::Debug,
-    R: super::Feature + std::fmt::Debug,
+    U: super::Feature + std::fmt::Debug + Clone,
+    L: super::Feature + std::fmt::Debug + Clone,
+    R: super::Feature + std::fmt::Debug + Clone,
 {
     fn name(&self) -> &'static str {
         "pos"

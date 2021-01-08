@@ -18,3 +18,4 @@ gerber-types = "0.2"
 structopt = "0.3"
 zip = { version = "0.5", default-features = false }
 nom = { version = "6", default-features = false, features = ["alloc"] }
+dyn-clone = "1.0"

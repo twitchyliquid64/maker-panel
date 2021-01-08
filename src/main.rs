@@ -204,23 +204,29 @@ fn main() {
     panel.push(AtPos::x_ends(
         Column::align_center(vec![
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
                 Direction::Right,
-                8,
+                12,
             ),
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
                 Direction::Right,
-                5,
+                9,
             ),
             repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [5., 5.].into()),
+                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
                 Direction::Right,
-                8,
+                12,
             ),
         ]),
-        Some(Circle::wrap_with_radius(ScrewHole::with_diameter(5.), 7.5)),
-        Some(Circle::wrap_with_radius(ScrewHole::with_diameter(5.), 7.5)),
+        Some(Circle::wrap_with_radius(
+            ScrewHole::with_diameter(5.),
+            11.25,
+        )),
+        Some(Circle::wrap_with_radius(
+            ScrewHole::with_diameter(5.),
+            11.25,
+        )),
     ));
     // panel.push(Circle::new([0., 7.5].into(), 7.5));
     // panel.push(Circle::new([20., 7.5].into(), 7.5));

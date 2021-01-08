@@ -1,5 +1,6 @@
 //! Components which compose a panel.
 
+use dyn_clone::DynClone;
 use geo::{Coordinate, MultiPolygon};
 use std::fmt;
 
@@ -18,11 +19,13 @@ pub use screw_hole::ScrewHole;
 pub use unit::Unit;
 
 /// Specifies geometry interior to the bounds of the panel.
-pub trait InnerFeature: fmt::Display {
+pub trait InnerFeature: fmt::Display + DynClone {
     fn name(&self) -> &'static str;
     fn translate(&mut self, v: Coordinate<f64>);
     fn atoms(&self) -> Vec<InnerAtom>;
 }
+
+dyn_clone::clone_trait_object!(InnerFeature);
 
 impl<'a> InnerFeature for Box<dyn InnerFeature + 'a> {
     fn name(&self) -> &'static str {
@@ -39,7 +42,7 @@ impl<'a> InnerFeature for Box<dyn InnerFeature + 'a> {
 }
 
 /// A top-level unit that makes up the geometry of the panel.
-pub trait Feature: fmt::Display {
+pub trait Feature: fmt::Display + DynClone {
     /// Human-readable name describing the construction.
     fn name(&self) -> &'static str;
     /// Adjust all coordinates by the specified amount. Should
@@ -63,6 +66,8 @@ pub trait Feature: fmt::Display {
         None
     }
 }
+
+dyn_clone::clone_trait_object!(Feature);
 
 impl<'a> Feature for Box<dyn Feature + 'a> {
     fn name(&self) -> &'static str {

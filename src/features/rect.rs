@@ -37,7 +37,7 @@ impl Rect {
     }
 }
 
-impl<U: super::InnerFeature> Rect<U> {
+impl<U: super::InnerFeature + Clone> Rect<U> {
     /// Constructs a rectangle surrounding the inner feature. The
     /// origin of the inner feature will match the centeroid of the
     /// rectangle.
@@ -92,7 +92,7 @@ impl<U: super::InnerFeature> fmt::Display for Rect<U> {
     }
 }
 
-impl<U: super::InnerFeature> super::Feature for Rect<U> {
+impl<U: super::InnerFeature + Clone> super::Feature for Rect<U> {
     fn name(&self) -> &'static str {
         "rect"
     }

@@ -33,6 +33,10 @@ pub enum AST {
         radius: f64,
         inner: Option<InnerAST>,
     },
+    Array {
+        num: usize,
+        inner: Box<AST>,
+    },
 }
 
 impl AST {
@@ -81,8 +85,24 @@ impl AST {
                 (None, Some(c)) => Box::new(Circle::new(c.into(), radius)),
                 (None, None) => Box::new(Circle::with_radius(radius)),
             },
+            AST::Array { num, inner } => Box::new(crate::features::repeating::Tile::new(
+                inner.into_feature(),
+                crate::Direction::Right,
+                num,
+            )),
         }
     }
+}
+
+fn parse_uint(i: &str) -> IResult<&str, usize> {
+    let (i, _) = multispace0(i)?;
+    let (i, s) = take_while(|c| c == '-' || (c >= '0' && c <= '9'))(i)?;
+    Ok((
+        i,
+        s.parse().map_err(|_e| {
+            nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Digit))
+        })?,
+    ))
 }
 
 fn parse_float(i: &str) -> IResult<&str, f64> {
@@ -218,6 +238,7 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
 }
 
 fn parse_rect(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
     let (i, _) = tag_no_case("R")(i)?;
     let (i, deets) = parse_details(i)?;
 
@@ -242,6 +263,7 @@ fn parse_rect(i: &str) -> IResult<&str, AST> {
 }
 
 fn parse_circle(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
     let (i, _) = tag_no_case("C")(i)?;
     let (i2, deets) = parse_details(i)?;
 
@@ -266,8 +288,27 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_array(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, num) = delimited(
+        tuple((tag("["), multispace0)),
+        parse_uint,
+        tuple((tag("]"), multispace0)),
+    )(i)?;
+    let (i, geo) = parse_geo(i)?;
+
+    Ok((
+        i,
+        AST::Array {
+            num,
+            inner: Box::new(geo),
+        },
+    ))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
-    alt((parse_rect, parse_circle))(i)
+    alt((parse_array, parse_rect, parse_circle))(i)
 }
 
 /// Parses the provided panel spec and returns the series of features
@@ -372,5 +413,14 @@ mod tests {
                 r > 3.49 && r < 3.51 && dia > 8.999 && dia < 9.001
             )
         );
+    }
+
+    #[test]
+    fn test_array() {
+        let out = parse_geo("[5]C<4.5>");
+        eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Array{ num: 5, inner: b})) if
+            matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
+        ));
     }
 }

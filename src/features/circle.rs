@@ -26,7 +26,7 @@ impl Circle {
     }
 }
 
-impl<U: super::InnerFeature> Circle<U> {
+impl<U: super::InnerFeature + Clone> Circle<U> {
     /// Constructs a circle surrounding the inner feature. The
     /// origin of the inner feature will be positioned at the
     /// center of the circle.
@@ -60,7 +60,7 @@ impl<U: super::InnerFeature> fmt::Display for Circle<U> {
     }
 }
 
-impl<U: super::InnerFeature> super::Feature for Circle<U> {
+impl<U: super::InnerFeature + Clone> super::Feature for Circle<U> {
     fn name(&self) -> &'static str {
         "circle"
     }
