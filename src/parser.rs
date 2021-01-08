@@ -42,6 +42,11 @@ pub enum AST {
         align: crate::Align,
         inners: Vec<Box<AST>>,
     },
+    XWrap {
+        l: Box<AST>,
+        m: Box<AST>,
+        r: Box<AST>,
+    },
 }
 
 impl AST {
@@ -95,11 +100,22 @@ impl AST {
                 dir,
                 num,
             )),
-            AST::ColumnLayout { align: _, inners } => {
-                Box::new(crate::features::Column::align_center(
+            AST::ColumnLayout { align, inners } => Box::new(match align {
+                crate::Align::Start => crate::features::Column::align_left(
                     inners.into_iter().map(|i| i.into_feature()).collect(),
-                ))
-            }
+                ),
+                crate::Align::Center => crate::features::Column::align_center(
+                    inners.into_iter().map(|i| i.into_feature()).collect(),
+                ),
+                crate::Align::End => crate::features::Column::align_right(
+                    inners.into_iter().map(|i| i.into_feature()).collect(),
+                ),
+            }),
+            AST::XWrap { l, m, r } => Box::new(crate::features::AtPos::x_ends(
+                m.into_feature(),
+                Some(l.into_feature()),
+                Some(r.into_feature()),
+            )),
         }
     }
 }
@@ -382,8 +398,40 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_xwrap(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (l, _, m, _, r, _)) = delimited(
+        tuple((tag_no_case("x_wrap"), multispace0, tag("("), multispace0)),
+        tuple((
+            parse_geo,
+            tag(","),
+            parse_geo,
+            tag(","),
+            parse_geo,
+            opt(tag(",")),
+        )),
+        tuple((multispace0, tag(")"), multispace0)),
+    )(i)?;
+
+    Ok((
+        i,
+        AST::XWrap {
+            l: Box::new(l),
+            m: Box::new(m),
+            r: Box::new(r),
+        },
+    ))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
-    alt((parse_array, parse_rect, parse_circle, parse_column_layout))(i)
+    alt((
+        parse_array,
+        parse_rect,
+        parse_circle,
+        parse_xwrap,
+        parse_column_layout,
+    ))(i)
 }
 
 /// Parses the provided panel spec and returns the series of features
@@ -441,7 +489,7 @@ mod tests {
             )
         );
 
-        let out = parse_geo("R<6>(h)");
+        let out = parse_geo(" R<6>(h)");
         assert!(
             matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: Some(InnerAST::ScrewHole(dia)) })) if
                 w > 5.99 && w < 6.01 && h > 5.99 && h < 6.01 &&
@@ -548,6 +596,25 @@ mod tests {
                 },
             ))
             if i.len() == 1
+        ));
+    }
+
+    #[test]
+    fn test_xwrap() {
+        let out = parse_geo("x_wrap(C<2>(h), R<5>, C<2>(h4))");
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::XWrap { l, m, r })) if
+            matches!(*l, AST::Circle{ inner: Some(_), .. }) &&
+            matches!(*m, AST::Rect{ .. }) &&
+            matches!(*r, AST::Circle{ inner: Some(_), .. })
+        ));
+
+        let out = parse_geo("x_wrap(C<2>(h), layout column center { [12] R<5>(h) } , C<2>(h))");
+        //eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::XWrap { l, m, r })) if
+            matches!(*l, AST::Circle{ inner: Some(_), .. }) &&
+            matches!(*m, AST::ColumnLayout{ .. }) &&
+            matches!(*r, AST::Circle{ inner: Some(_), .. })
         ));
     }
 }

@@ -1,7 +1,4 @@
-use maker_panel::{
-    features::{repeating, AtPos, Circle, Column, Rect, ScrewHole},
-    Direction, Layer, Panel,
-};
+use maker_panel::{Layer, Panel};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -195,41 +192,25 @@ struct Opt {
     cmd: Cmd,
 }
 
+const DEMO_SPEC: &'static str = "
+x_wrap(
+    C<11.25>(h5),
+    layout column center {
+        [12] R<7.5>(h)
+        [ 9] R<7.5>(h)
+        [12] R<7.5>(h)
+    },
+    C<11.25>(h5),
+)
+";
+
 fn main() {
     let args = Opt::from_args();
 
     let mut panel = Panel::new();
     // panel.convex_hull(true);
     // panel.push(Rect::with_center([0.0, -2.5].into(), 5., 5.));
-    panel.push(AtPos::x_ends(
-        Column::align_center(vec![
-            repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
-                Direction::Right,
-                12,
-            ),
-            repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
-                Direction::Right,
-                9,
-            ),
-            repeating::Tile::new(
-                Rect::with_inner(ScrewHole::default()).bounds([0., 0.].into(), [7.5, 7.5].into()),
-                Direction::Right,
-                12,
-            ),
-        ]),
-        Some(Circle::wrap_with_radius(
-            ScrewHole::with_diameter(5.),
-            11.25,
-        )),
-        Some(Circle::wrap_with_radius(
-            ScrewHole::with_diameter(5.),
-            11.25,
-        )),
-    ));
-    // panel.push(Circle::new([0., 7.5].into(), 7.5));
-    // panel.push(Circle::new([20., 7.5].into(), 7.5));
+    panel.push_spec(DEMO_SPEC).unwrap();
 
     if let Err(e) = run_cmd(args, panel) {
         eprintln!("Error: {:?}", e);
