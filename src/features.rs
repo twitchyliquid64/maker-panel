@@ -19,7 +19,7 @@ pub use screw_hole::ScrewHole;
 pub use unit::Unit;
 
 /// Specifies geometry interior to the bounds of the panel.
-pub trait InnerFeature: fmt::Display + DynClone {
+pub trait InnerFeature: fmt::Display + DynClone + fmt::Debug {
     fn name(&self) -> &'static str;
     fn translate(&mut self, v: Coordinate<f64>);
     fn atoms(&self) -> Vec<InnerAtom>;
@@ -42,7 +42,7 @@ impl<'a> InnerFeature for Box<dyn InnerFeature + 'a> {
 }
 
 /// A top-level unit that makes up the geometry of the panel.
-pub trait Feature: fmt::Display + DynClone {
+pub trait Feature: fmt::Display + DynClone + fmt::Debug {
     /// Human-readable name describing the construction.
     fn name(&self) -> &'static str;
     /// Adjust all coordinates by the specified amount. Should

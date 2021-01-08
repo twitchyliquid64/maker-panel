@@ -60,7 +60,7 @@ impl<U: super::InnerFeature> fmt::Display for Circle<U> {
     }
 }
 
-impl<U: super::InnerFeature + Clone> super::Feature for Circle<U> {
+impl<U: super::InnerFeature + Clone + std::fmt::Debug> super::Feature for Circle<U> {
     fn name(&self) -> &'static str {
         "circle"
     }

@@ -38,6 +38,10 @@ pub enum AST {
         num: usize,
         inner: Box<AST>,
     },
+    ColumnLayout {
+        align: crate::Align,
+        inners: Vec<Box<AST>>,
+    },
 }
 
 impl AST {
@@ -91,6 +95,11 @@ impl AST {
                 dir,
                 num,
             )),
+            AST::ColumnLayout { align: _, inners } => {
+                Box::new(crate::features::Column::align_center(
+                    inners.into_iter().map(|i| i.into_feature()).collect(),
+                ))
+            }
         }
     }
 }
@@ -330,8 +339,51 @@ fn parse_array(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_column_layout(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (dir, _, _, inners)) = delimited(
+        tuple((
+            tag_no_case("layout"),
+            multispace0,
+            tag_no_case("column"),
+            multispace0,
+        )),
+        tuple((
+            alt((
+                tag_no_case("left"),
+                tag_no_case("center"),
+                tag_no_case("right"),
+            )),
+            multispace0,
+            tag("{"),
+            fold_many1(
+                tuple((parse_geo, multispace0, opt(tag(",")))),
+                Vec::new(),
+                |mut acc, (inner, _, _)| {
+                    acc.push(Box::new(inner));
+                    acc
+                },
+            ),
+        )),
+        tuple((tag("}"), multispace0)),
+    )(i)?;
+
+    Ok((
+        i,
+        AST::ColumnLayout {
+            align: match dir.to_lowercase().as_str() {
+                "left" => crate::Align::Start,
+                "right" => crate::Align::End,
+                _ => crate::Align::Center,
+            },
+            inners: inners,
+        },
+    ))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
-    alt((parse_array, parse_rect, parse_circle))(i)
+    alt((parse_array, parse_rect, parse_circle, parse_column_layout))(i)
 }
 
 /// Parses the provided panel spec and returns the series of features
@@ -454,5 +506,48 @@ mod tests {
                 matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
             )
         );
+    }
+
+    #[test]
+    fn test_column_layout() {
+        let out = parse_geo("layout column left { R<5> }");
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::ColumnLayout {
+                    align: crate::Align::Start,
+                    inners: i,
+                },
+            ))
+            if i.len() == 1
+        ));
+
+        let out = parse_geo("layout column RiGHt { C<5> R<1> }");
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::ColumnLayout {
+                    align: crate::Align::End,
+                    inners: i,
+                },
+            ))
+            if i.len() == 2
+        ));
+
+        let out = parse_geo("layout column center { R<1> }");
+        // eprintln!("{:?}", out);
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::ColumnLayout {
+                    align: crate::Align::Center,
+                    inners: i,
+                },
+            ))
+            if i.len() == 1
+        ));
     }
 }
