@@ -1,6 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while};
-use nom::character::complete::multispace0;
+use nom::character::complete::{multispace0, one_of};
 use nom::combinator::{map, opt};
 use nom::multi::{fold_many1, many0};
 use nom::sequence::{delimited, tuple};
@@ -34,6 +34,7 @@ pub enum AST {
         inner: Option<InnerAST>,
     },
     Array {
+        dir: crate::Direction,
         num: usize,
         inner: Box<AST>,
     },
@@ -85,9 +86,9 @@ impl AST {
                 (None, Some(c)) => Box::new(Circle::new(c.into(), radius)),
                 (None, None) => Box::new(Circle::with_radius(radius)),
             },
-            AST::Array { num, inner } => Box::new(crate::features::repeating::Tile::new(
+            AST::Array { dir, num, inner } => Box::new(crate::features::repeating::Tile::new(
                 inner.into_feature(),
-                crate::Direction::Right,
+                dir,
                 num,
             )),
         }
@@ -291,16 +292,38 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
 fn parse_array(i: &str) -> IResult<&str, AST> {
     let (i, _) = multispace0(i)?;
 
-    let (i, num) = delimited(
+    let (i, params) = delimited(
         tuple((tag("["), multispace0)),
-        parse_uint,
+        tuple((
+            parse_uint,
+            opt(tuple((multispace0, tag(";"), multispace0, one_of("UDRL")))),
+        )),
         tuple((tag("]"), multispace0)),
     )(i)?;
     let (i, geo) = parse_geo(i)?;
 
+    let (num, dir) = params;
+    let dir = if let Some((_, _, _, s)) = dir {
+        match s {
+            'L' => crate::Direction::Left,
+            'R' => crate::Direction::Right,
+            'U' => crate::Direction::Up,
+            'D' => crate::Direction::Down,
+            _ => {
+                return Err(nom::Err::Failure(nom::error::make_error(
+                    i,
+                    nom::error::ErrorKind::Satisfy,
+                )));
+            }
+        }
+    } else {
+        crate::Direction::Right
+    };
+
     Ok((
         i,
         AST::Array {
+            dir,
             num,
             inner: Box::new(geo),
         },
@@ -418,9 +441,18 @@ mod tests {
     #[test]
     fn test_array() {
         let out = parse_geo("[5]C<4.5>");
+        assert!(
+            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Right})) if
+                matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
+            )
+        );
+
+        let out = parse_geo("[5; D]C<4.5>");
         eprintln!("{:?}", out);
-        assert!(matches!(out, Ok(("", AST::Array{ num: 5, inner: b})) if
-            matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
-        ));
+        assert!(
+            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Down})) if
+                matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
+            )
+        );
     }
 }
