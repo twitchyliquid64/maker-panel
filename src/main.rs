@@ -7,6 +7,7 @@ enum Err {
     IO(std::io::Error),
     General(maker_panel::Err),
     Zip(zip::result::ZipError),
+    SpecError(usize, String),
 }
 
 /// Represents an output format provided for the gen command.
@@ -188,29 +189,51 @@ pub enum Cmd {
     about = "Generates mechanical PCBs based on repeating geometry"
 )]
 struct Opt {
+    #[structopt(
+        name = "from-files",
+        short = "f",
+        long,
+        about = "Whether the inputs should be interpreted as file paths to read, or as literal input"
+    )]
+    from_files: bool,
+
+    input_spec: Vec<String>,
+
     #[structopt(subcommand)]
     cmd: Cmd,
 }
 
-const DEMO_SPEC: &'static str = "
-x_wrap(
-    C<11.25>(h5),
-    layout column center {
-        [12] R<7.5>(h)
-        [ 9] R<7.5>(h)
-        [12] R<7.5>(h)
-    },
-    C<11.25>(h5),
-)
-";
+impl Opt {
+    fn panel(&self, panel: &mut Panel) -> Result<(), Err> {
+        for (i, s) in self.input_spec.iter().enumerate() {
+            let content = if self.from_files {
+                use std::fs::read;
+                String::from_utf8_lossy(&read(s).map_err(|e| Err::IO(e))?).to_string()
+            } else {
+                s.to_string()
+            };
+            panel
+                .push_spec(&content)
+                .map_err(|_e| Err::SpecError(i, s.clone()))?;
+        }
+        Ok(())
+    }
+}
 
 fn main() {
     let args = Opt::from_args();
 
     let mut panel = Panel::new();
+    match args.panel(&mut panel) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("Error: {:?}", e);
+            std::process::exit(1);
+        }
+    };
     // panel.convex_hull(true);
     // panel.push(Rect::with_center([0.0, -2.5].into(), 5., 5.));
-    panel.push_spec(DEMO_SPEC).unwrap();
+    // panel.push_spec(DEMO_SPEC).unwrap();
 
     if let Err(e) = run_cmd(args, panel) {
         eprintln!("Error: {:?}", e);

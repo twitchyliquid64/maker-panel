@@ -359,12 +359,7 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
     let (i, _) = multispace0(i)?;
 
     let (i, (dir, _, _, inners)) = delimited(
-        tuple((
-            tag_no_case("layout"),
-            multispace0,
-            tag_no_case("column"),
-            multispace0,
-        )),
+        tuple((tag_no_case("column"), multispace0)),
         tuple((
             alt((
                 tag_no_case("left"),
@@ -558,7 +553,7 @@ mod tests {
 
     #[test]
     fn test_column_layout() {
-        let out = parse_geo("layout column left { R<5> }");
+        let out = parse_geo("column left { R<5> }");
         assert!(matches!(
             out,
             Ok((
@@ -571,7 +566,7 @@ mod tests {
             if i.len() == 1
         ));
 
-        let out = parse_geo("layout column RiGHt { C<5> R<1> }");
+        let out = parse_geo("column RiGHt { C<5> R<1> }");
         assert!(matches!(
             out,
             Ok((
@@ -584,7 +579,7 @@ mod tests {
             if i.len() == 2
         ));
 
-        let out = parse_geo("layout column center { R<1> }");
+        let out = parse_geo("column center { R<1> }");
         // eprintln!("{:?}", out);
         assert!(matches!(
             out,
@@ -609,7 +604,7 @@ mod tests {
             matches!(*r, AST::Circle{ inner: Some(_), .. })
         ));
 
-        let out = parse_geo("x_wrap(C<2>(h), layout column center { [12] R<5>(h) } , C<2>(h))");
+        let out = parse_geo("x_wrap(C<2>(h), column center { [12] R<5>(h) } , C<2>(h))");
         //eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::XWrap { l, m, r })) if
             matches!(*l, AST::Circle{ inner: Some(_), .. }) &&

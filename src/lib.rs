@@ -399,10 +399,10 @@ mod tests {
     }
 
     #[test]
-    fn test_layout_down() {
+    fn test_column_down() {
         let mut panel = Panel::new();
         panel
-            .push_spec("layout column left { R<5,5>(h) R<3>(h) } ")
+            .push_spec("column left { R<5,5>(h) R<3>(h) } ")
             .unwrap();
 
         use geo::bounding_rect::BoundingRect;

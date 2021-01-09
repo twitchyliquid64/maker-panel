@@ -13,7 +13,7 @@ This (using maker-panel expressions):
 ```go
 x_wrap(
     C<11.25>(h5),
-    layout column center {
+    column center {
         [12] R<7.5>(h)
         [ 9] R<7.5>(h)
         [12] R<7.5>(h)
@@ -25,7 +25,7 @@ x_wrap(
 Makes this:
 
 <p align="center">
-  <img alt="Example 2" src="images/ex2.png" width="60%">
+  <img alt="Example 2" src="examples/ex2.png" width="60%">
 </p>
 
 
@@ -57,5 +57,5 @@ panel.push(Circle::new([15., 7.5].into(), 7.5));
 Makes this:
 
 <p align="center">
-  <img alt="Example 1" src="images/ex1.png" width="60%">
+  <img alt="Example 1" src="examples/ex1.png" width="60%">
 </p>

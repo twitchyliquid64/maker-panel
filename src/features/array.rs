@@ -202,8 +202,8 @@ mod tests {
         assert_eq!(
             a.all_bounds(),
             vec![
-                geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [2., 3.].into()),
-                geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into()),
+                geo::Rect::new::<geo::Coordinate<_>>([0., 0.].into(), [2., 3.].into()),
+                geo::Rect::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into()),
             ]
         );
     }
@@ -217,7 +217,7 @@ mod tests {
 
         assert_eq!(
             a.largest(),
-            geo::Rect::<f64>::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into(),),
+            geo::Rect::new::<geo::Coordinate<_>>([0., 0.].into(), [3., 2.].into(),),
         );
     }
 
