@@ -27,6 +27,7 @@ pub enum AST {
         coords: Option<(f64, f64)>,
         size: Option<(f64, f64)>,
         inner: Option<InnerAST>,
+        rounded: Option<f64>,
     },
     Circle {
         coords: Option<(f64, f64)>,
@@ -39,6 +40,7 @@ pub enum AST {
         inner: Box<AST>,
     },
     ColumnLayout {
+        coords: Option<(f64, f64)>,
         align: crate::Align,
         inners: Vec<Box<AST>>,
     },
@@ -58,6 +60,7 @@ impl AST {
                 coords,
                 size,
                 inner,
+                rounded: _,
             } => {
                 if let Some(inner) = inner {
                     let r = Rect::with_inner(inner.into_inner_feature());
@@ -100,16 +103,27 @@ impl AST {
                 dir,
                 num,
             )),
-            AST::ColumnLayout { align, inners } => Box::new(match align {
-                crate::Align::Start => crate::features::Column::align_left(
-                    inners.into_iter().map(|i| i.into_feature()).collect(),
-                ),
-                crate::Align::Center => crate::features::Column::align_center(
-                    inners.into_iter().map(|i| i.into_feature()).collect(),
-                ),
-                crate::Align::End => crate::features::Column::align_right(
-                    inners.into_iter().map(|i| i.into_feature()).collect(),
-                ),
+            AST::ColumnLayout {
+                align,
+                inners,
+                coords,
+            } => Box::new({
+                let mut layout = match align {
+                    crate::Align::Start => crate::features::Column::align_left(
+                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                    ),
+                    crate::Align::Center => crate::features::Column::align_center(
+                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                    ),
+                    crate::Align::End => crate::features::Column::align_right(
+                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                    ),
+                };
+                if let Some((x, y)) = coords {
+                    use crate::features::Feature;
+                    layout.translate([x, y].into());
+                };
+                layout
             }),
             AST::XWrap { l, m, r } => Box::new(crate::features::AtPos::x_ends(
                 m.into_feature(),
@@ -175,6 +189,7 @@ enum DetailFragment {
     Coord(f64, f64),
     Size(f64, f64),
     Radius(f64),
+    Rounding(f64),
     Extra(f64),
 }
 
@@ -185,6 +200,7 @@ struct Details {
     radius: Option<f64>,
     extra: Vec<f64>,
     inner: Option<InnerAST>,
+    rounded: Option<f64>,
 }
 
 impl Details {
@@ -220,6 +236,17 @@ impl Details {
         ))(i)?;
         Ok((i, DetailFragment::Radius(r)))
     }
+    fn parse_rounding(i: &str) -> IResult<&str, DetailFragment> {
+        let (i, _) = multispace0(i)?;
+        let (i, (_, _, _, _, r)) = tuple((
+            alt((tag_no_case("round"), tag_no_case("r"))),
+            multispace0,
+            tag("="),
+            multispace0,
+            parse_float,
+        ))(i)?;
+        Ok((i, DetailFragment::Rounding(r)))
+    }
 
     fn with_inner(mut self, inner: Option<InnerAST>) -> Self {
         self.inner = inner;
@@ -237,6 +264,7 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
                 tuple((Details::parse_pos, multispace0, opt(tag(",")))),
                 tuple((Details::parse_size, multispace0, opt(tag(",")))),
                 tuple((Details::parse_radius, multispace0, opt(tag(",")))),
+                tuple((Details::parse_rounding, multispace0, opt(tag(",")))),
                 tuple((Details::parse_extra, multispace0, opt(tag(",")))),
             )),
             Details::default(),
@@ -250,6 +278,9 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
                     }
                     DetailFragment::Radius(r) => {
                         acc.radius = Some(r);
+                    }
+                    DetailFragment::Rounding(r) => {
+                        acc.rounded = Some(r);
                     }
                     DetailFragment::Extra(f) => acc.extra.push(f),
                 }
@@ -284,6 +315,7 @@ fn parse_rect(i: &str) -> IResult<&str, AST> {
             size,
             coords: deets.coords,
             inner: deets.inner,
+            rounded: deets.rounded,
         },
     ))
 }
@@ -358,7 +390,7 @@ fn parse_array(i: &str) -> IResult<&str, AST> {
 fn parse_column_layout(i: &str) -> IResult<&str, AST> {
     let (i, _) = multispace0(i)?;
 
-    let (i, (dir, _, _, inners)) = delimited(
+    let (i, (dir, _, pos, _, _, inners)) = delimited(
         tuple((tag_no_case("column"), multispace0)),
         tuple((
             alt((
@@ -366,6 +398,8 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
                 tag_no_case("center"),
                 tag_no_case("right"),
             )),
+            multispace0,
+            opt(tuple((tag("@"), parse_coords))),
             multispace0,
             tag("{"),
             fold_many1(
@@ -389,6 +423,7 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
                 _ => crate::Align::Center,
             },
             inners: inners,
+            coords: pos.map(|x| x.1),
         },
     ))
 }
@@ -448,14 +483,14 @@ mod tests {
     fn test_rect() {
         let out = parse_geo("R<@(1,2)>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: None, inner: _ })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: None, inner: _, rounded: None })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01
             )
         );
 
         let out = parse_geo("R<@(1,2), 2, 4>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _, rounded: None })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 1.99 && w < 2.01 && h > 3.99 && h < 4.01
             )
@@ -463,7 +498,7 @@ mod tests {
 
         let out = parse_geo("R<@(1,2), 4>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _, rounded: None })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
             )
@@ -471,14 +506,14 @@ mod tests {
 
         let out = parse_geo("R<4>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: _ })) if
+            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: _, rounded: None })) if
                 w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
             )
         );
 
         let out = parse_geo("R<@(1,2), size = (2,4)>");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _ })) if
+            matches!(out, Ok(("", AST::Rect{ coords: Some(c), size: Some((w, h)), inner: _, rounded: None })) if
                 c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01 &&
                 w > 1.99 && w < 2.01 && h > 3.99 && h < 4.01
             )
@@ -486,7 +521,15 @@ mod tests {
 
         let out = parse_geo(" R<6>(h)");
         assert!(
-            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: Some(InnerAST::ScrewHole(dia)) })) if
+            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: Some(InnerAST::ScrewHole(dia)), rounded: None })) if
+                w > 5.99 && w < 6.01 && h > 5.99 && h < 6.01 &&
+                dia < 3.11 && dia > 3.09
+            )
+        );
+
+        let out = parse_geo(" R<6, round = 2>(h)");
+        assert!(
+            matches!(out, Ok(("", AST::Rect{ coords: None, size: Some((w, h)), inner: Some(InnerAST::ScrewHole(dia)), rounded: Some(_) })) if
                 w > 5.99 && w < 6.01 && h > 5.99 && h < 6.01 &&
                 dia < 3.11 && dia > 3.09
             )
@@ -561,6 +604,7 @@ mod tests {
                 AST::ColumnLayout {
                     align: crate::Align::Start,
                     inners: i,
+                    coords: None,
                 },
             ))
             if i.len() == 1
@@ -574,6 +618,7 @@ mod tests {
                 AST::ColumnLayout {
                     align: crate::Align::End,
                     inners: i,
+                    coords: None,
                 },
             ))
             if i.len() == 2
@@ -588,9 +633,25 @@ mod tests {
                 AST::ColumnLayout {
                     align: crate::Align::Center,
                     inners: i,
+                    coords: None,
                 },
             ))
             if i.len() == 1
+        ));
+
+        let out = parse_geo("column center @(1, 2) { R<1> }");
+        eprintln!("{:?}", out);
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::ColumnLayout {
+                    align: crate::Align::Center,
+                    inners: i,
+                    coords: Some(c),
+                },
+            ))
+            if i.len() == 1 && c.0 > 0.99 && c.0 < 1.01 && c.1 > 1.99 && c.1 < 2.01
         ));
     }
 

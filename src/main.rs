@@ -197,6 +197,14 @@ struct Opt {
     )]
     from_files: bool,
 
+    #[structopt(
+        name = "convex-hull",
+        short = "ch",
+        long = "hull",
+        about = "Whether to apply a convex hull transform on the final exterior geometry"
+    )]
+    convex_hull: bool,
+
     input_spec: Vec<String>,
 
     #[structopt(subcommand)]
@@ -205,6 +213,8 @@ struct Opt {
 
 impl Opt {
     fn panel(&self, panel: &mut Panel) -> Result<(), Err> {
+        panel.convex_hull(self.convex_hull);
+
         for (i, s) in self.input_spec.iter().enumerate() {
             let content = if self.from_files {
                 use std::fs::read;

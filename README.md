@@ -28,6 +28,33 @@ Makes this:
   <img alt="Example 2" src="examples/ex2.png" width="60%">
 </p>
 
+and this:
+
+```go
+column center {
+  [12] R<7.5>(h)
+  [11] R<7.5>(h)
+  [12] R<7.5>(h)
+}
+
+C<@(2.5, 2.5), 5>
+C<@(87.5, 2.5), 5>
+C<@(87.5, 20), 5>
+C<@(2.5, 20), 5>
+```
+
+generated with
+
+```
+cargo run -- --hull -f examples/ex3.spec png --size z:8 examples/ex3.png
+```
+
+makes this:
+
+<p align="center">
+  <img alt="Example 3" src="examples/ex3.png" width="60%">
+</p>
+
 
 and this (in literal rust):
 
