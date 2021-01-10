@@ -1,3 +1,4 @@
+use crate::Direction;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while};
 use nom::character::complete::{multispace0, one_of};
@@ -44,10 +45,9 @@ pub enum AST {
         align: crate::Align,
         inners: Vec<Box<AST>>,
     },
-    XWrap {
-        l: Box<AST>,
-        m: Box<AST>,
-        r: Box<AST>,
+    Wrap {
+        inner: Box<AST>,
+        features: Vec<(crate::features::Positioning, Box<AST>)>,
     },
 }
 
@@ -125,11 +125,13 @@ impl AST {
                 };
                 layout
             }),
-            AST::XWrap { l, m, r } => Box::new(crate::features::AtPos::x_ends(
-                m.into_feature(),
-                Some(l.into_feature()),
-                Some(r.into_feature()),
-            )),
+            AST::Wrap { inner, features } => {
+                let mut pos = crate::features::AtPos::new(inner.into_feature());
+                for (position, feature) in features {
+                    pos.push(feature.into_feature(), position);
+                }
+                Box::new(pos)
+            }
         }
     }
 }
@@ -147,7 +149,7 @@ fn parse_uint(i: &str) -> IResult<&str, usize> {
 
 fn parse_float(i: &str) -> IResult<&str, f64> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = take_while(|c| c == '.' || c == '-' || (c >= '0' && c <= '9'))(i)?;
+    let (i, s) = take_while(|c| c == '.' || c == '+' || c == '-' || (c >= '0' && c <= '9'))(i)?;
     Ok((
         i,
         s.parse().map_err(|_e| {
@@ -428,28 +430,77 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_xwrap(i: &str) -> IResult<&str, AST> {
-    let (i, _) = multispace0(i)?;
-
-    let (i, (l, _, m, _, r, _)) = delimited(
-        tuple((tag_no_case("x_wrap"), multispace0, tag("("), multispace0)),
-        tuple((
-            parse_geo,
-            tag(","),
-            parse_geo,
-            tag(","),
-            parse_geo,
-            opt(tag(",")),
+fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
+    let (i, (_, side, _, offset, _, _)) = tuple((
+        multispace0,
+        alt((
+            tag_no_case("left"),
+            tag_no_case("right"),
+            tag_no_case("up"),
+            tag_no_case("down"),
+            tag_no_case("top"),
+            tag_no_case("bottom"),
         )),
-        tuple((multispace0, tag(")"), multispace0)),
-    )(i)?;
+        multispace0,
+        opt(parse_float),
+        multispace0,
+        tag("=>"),
+    ))(i)?;
 
     Ok((
         i,
-        AST::XWrap {
-            l: Box::new(l),
-            m: Box::new(m),
-            r: Box::new(r),
+        crate::features::Positioning {
+            side: match side.to_lowercase().as_str() {
+                "left" => Direction::Left,
+                "right" => Direction::Right,
+                "top" | "up" => Direction::Up,
+                "bottom" | "down" => Direction::Down,
+                _ => unreachable!(),
+            },
+            centerline_adjustment: match offset {
+                Some(offset) => offset,
+                None => 0.0,
+            },
+        },
+    ))
+}
+
+fn parse_wrap(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (_, _, _, inner, _, _, _, _, _, _)) = tuple((
+        tag_no_case("wrap"),
+        multispace0,
+        tag("("),
+        parse_geo,
+        multispace0,
+        tag(")"),
+        multispace0,
+        tag_no_case("with"),
+        multispace0,
+        tag("{"),
+    ))(i)?;
+    let (i, elements) = fold_many1(
+        tuple((
+            parse_pos_spec,
+            multispace0,
+            parse_geo,
+            multispace0,
+            opt(tag(",")),
+        )),
+        Vec::new(),
+        |mut acc, (pos, _, feature, _, _)| {
+            acc.push((pos, Box::new(feature)));
+            acc
+        },
+    )(i)?;
+    let (i, _) = tuple((multispace0, tag("}"), multispace0))(i)?;
+
+    Ok((
+        i,
+        AST::Wrap {
+            inner: Box::new(inner),
+            features: elements,
         },
     ))
 }
@@ -459,7 +510,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
         parse_array,
         parse_rect,
         parse_circle,
-        parse_xwrap,
+        parse_wrap,
         parse_column_layout,
     ))(i)
 }
@@ -656,21 +707,19 @@ mod tests {
     }
 
     #[test]
-    fn test_xwrap() {
-        let out = parse_geo("x_wrap(C<2>(h), R<5>, C<2>(h4))");
-        // eprintln!("{:?}", out);
-        assert!(matches!(out, Ok(("", AST::XWrap { l, m, r })) if
-            matches!(*l, AST::Circle{ inner: Some(_), .. }) &&
-            matches!(*m, AST::Rect{ .. }) &&
-            matches!(*r, AST::Circle{ inner: Some(_), .. })
+    fn test_wrap() {
+        let out = parse_geo("wrap (R<5>) with { left-0.5 => C<2>(h), right => C<2>(h4) }");
+        //eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::Rect{ .. }) && features.len() == 2
         ));
 
-        let out = parse_geo("x_wrap(C<2>(h), column center { [12] R<5>(h) } , C<2>(h))");
-        //eprintln!("{:?}", out);
-        assert!(matches!(out, Ok(("", AST::XWrap { l, m, r })) if
-            matches!(*l, AST::Circle{ inner: Some(_), .. }) &&
-            matches!(*m, AST::ColumnLayout{ .. }) &&
-            matches!(*r, AST::Circle{ inner: Some(_), .. })
+        let out = parse_geo(
+            "wrap(column center {[12] R<5>(h)}) with {left-0.5 => C<2>(h), right+0.5 => C<2>(h)}",
+        );
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::ColumnLayout{ .. }) && features.len() == 2
         ));
     }
 }

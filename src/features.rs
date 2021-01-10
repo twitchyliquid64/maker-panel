@@ -13,7 +13,7 @@ mod screw_hole;
 mod unit;
 pub use array::Column;
 pub use circle::Circle;
-pub use pos::AtPos;
+pub use pos::{AtPos, Positioning};
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
 pub use unit::Unit;

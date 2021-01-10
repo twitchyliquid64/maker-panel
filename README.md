@@ -11,15 +11,14 @@ Eventually you'll be able to specify very basic geometry (ie: screw holes repeat
 This (using maker-panel expressions):
 
 ```go
-x_wrap(
-    C<11.25>(h5),
-    column center {
-        [12] R<7.5>(h)
-        [ 9] R<7.5>(h)
-        [12] R<7.5>(h)
-    },
-    C<11.25>(h5),
-)
+wrap (column center {
+    [12] R<7.5>(h)
+    [ 9] R<7.5>(h)
+    [12] R<7.5>(h)
+}) with {
+  left => C<11.25>(h5),
+  right => C<11.25>(h5),
+}
 ```
 
 Makes this:
@@ -31,16 +30,18 @@ Makes this:
 and this:
 
 ```go
-column center {
-  [12] R<7.5>(h)
-  [11] R<7.5>(h)
-  [12] R<7.5>(h)
+wrap (
+  column center {
+    [12] R<7.5>(h)
+    [11] R<7.5>(h)
+    [12] R<7.5>(h)
+  }
+) with {
+  top-0.5 => C<2>,
+  top+0.5 => C<2>,
+  bottom-0.5 => C<2>,
+  bottom+0.5 => C<2>,
 }
-
-C<@(2.5, 2.5), 5>
-C<@(87.5, 2.5), 5>
-C<@(87.5, 20), 5>
-C<@(2.5, 20), 5>
 ```
 
 generated with
