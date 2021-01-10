@@ -10,12 +10,14 @@ mod pos;
 mod rect;
 pub mod repeating;
 mod screw_hole;
+mod triangle;
 mod unit;
 pub use array::Column;
 pub use circle::Circle;
 pub use pos::{AtPos, Positioning};
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
+pub use triangle::Triangle;
 pub use unit::Unit;
 
 /// Specifies geometry interior to the bounds of the panel.

@@ -46,7 +46,7 @@ impl Layer {
 }
 
 /// The direction in which repetitions occur.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Direction {
     Left,
     Right,

@@ -46,7 +46,7 @@ wrap (
 
 generated with
 
-```
+```shell
 cargo run -- --hull -f examples/ex3.spec png --size z:8 examples/ex3.png
 ```
 

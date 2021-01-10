@@ -35,6 +35,10 @@ pub enum AST {
         radius: f64,
         inner: Option<InnerAST>,
     },
+    Triangle {
+        size: (f64, f64),
+        inner: Option<InnerAST>,
+    },
     Array {
         dir: crate::Direction,
         num: usize,
@@ -53,7 +57,7 @@ pub enum AST {
 
 impl AST {
     fn into_feature<'a>(self) -> Box<dyn super::Feature + 'a> {
-        use super::features::{Circle, Rect};
+        use super::features::{Circle, Rect, Triangle};
 
         match self {
             AST::Rect {
@@ -97,6 +101,14 @@ impl AST {
                 }
                 (None, Some(c)) => Box::new(Circle::new(c.into(), radius)),
                 (None, None) => Box::new(Circle::with_radius(radius)),
+            },
+            AST::Triangle { size, inner } => match inner {
+                Some(i) => Box::new(Triangle::with_inner(i.into_inner_feature()).dimensions(
+                    [0., 0.].into(),
+                    size.0,
+                    size.1,
+                )),
+                None => Box::new(Triangle::right_angle(size.0, size.1)),
             },
             AST::Array { dir, num, inner } => Box::new(crate::features::repeating::Tile::new(
                 inner.into_feature(),
@@ -348,6 +360,33 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_triangle(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+    let (i, _) = tag_no_case("T")(i)?;
+    let (i2, deets) = parse_details(i)?;
+
+    let size = if let Some((x, y)) = deets.size {
+        (x, y)
+    } else if deets.extra.len() == 2 {
+        (deets.extra[0], deets.extra[1])
+    } else if deets.extra.len() == 1 {
+        (deets.extra[0], deets.extra[0])
+    } else {
+        return Err(nom::Err::Failure(nom::error::make_error(
+            i,
+            nom::error::ErrorKind::Satisfy,
+        )));
+    };
+
+    Ok((
+        i2,
+        AST::Triangle {
+            size,
+            inner: deets.inner,
+        },
+    ))
+}
+
 fn parse_array(i: &str) -> IResult<&str, AST> {
     let (i, _) = multispace0(i)?;
 
@@ -510,6 +549,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
         parse_array,
         parse_rect,
         parse_circle,
+        parse_triangle,
         parse_wrap,
         parse_column_layout,
     ))(i)
@@ -628,6 +668,16 @@ mod tests {
     }
 
     #[test]
+    fn test_triangle() {
+        let out = parse_geo("T<2,1>");
+        assert!(
+            matches!(out, Ok(("", AST::Triangle{ size: c, inner: _ })) if
+                c.1 > 0.99 && c.1 < 1.01 && c.0 > 1.99 && c.0 < 2.01
+            )
+        );
+    }
+
+    #[test]
     fn test_array() {
         let out = parse_geo("[5]C<4.5>");
         assert!(
@@ -719,7 +769,10 @@ mod tests {
         );
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
-            matches!(*inner, AST::ColumnLayout{ .. }) && features.len() == 2
+            matches!(*inner, AST::ColumnLayout{ .. }) && features.len() == 2 &&
+            features[0].0.side == crate::Direction::Left && features[1].0.side == crate::Direction::Right &&
+            features[0].0.centerline_adjustment < -0.4 && features[0].0.centerline_adjustment > -0.6 &&
+            features[1].0.centerline_adjustment > 0.4 && features[1].0.centerline_adjustment < 0.6
         ));
     }
 }
