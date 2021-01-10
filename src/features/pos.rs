@@ -1,4 +1,4 @@
-use crate::Direction;
+use crate::{Align, Direction};
 use geo::{Coordinate, MultiPolygon};
 use std::fmt;
 
@@ -7,31 +7,57 @@ use std::fmt;
 pub struct Positioning {
     pub side: Direction,
     pub centerline_adjustment: f64,
+    pub align: Align,
 }
 
 impl Positioning {
     fn compute_translation(&self, bounds: geo::Rect<f64>, feature: geo::Rect<f64>) -> (f64, f64) {
         match self.side {
             Direction::Left => (
-                bounds.min().x - feature.center().x,
+                bounds.min().x - self.compute_align_ref(feature),
                 bounds.center().y - feature.center().y
                     + (self.centerline_adjustment * bounds.height()),
             ),
             Direction::Right => (
-                bounds.max().x - feature.center().x,
+                bounds.max().x - self.compute_align_ref(feature),
                 bounds.center().y - feature.center().y
                     + (self.centerline_adjustment * bounds.height()),
             ),
             Direction::Up => (
                 bounds.center().x - feature.center().x
                     + (self.centerline_adjustment * bounds.width()),
-                bounds.min().y - feature.center().y,
+                bounds.min().y - self.compute_align_ref(feature),
             ),
             Direction::Down => (
                 bounds.center().x - feature.center().x
                     + (self.centerline_adjustment * bounds.width()),
-                bounds.max().y - feature.center().y,
+                bounds.max().y - self.compute_align_ref(feature),
             ),
+        }
+    }
+
+    fn compute_align_ref(&self, feature: geo::Rect<f64>) -> f64 {
+        match self.side {
+            Direction::Left => match self.align {
+                Align::Start => feature.min().x,
+                Align::Center => feature.center().x,
+                Align::End => feature.max().x,
+            },
+            Direction::Right => match self.align {
+                Align::Start => feature.max().x,
+                Align::Center => feature.center().x,
+                Align::End => feature.min().x,
+            },
+            Direction::Up => match self.align {
+                Align::Start => feature.min().y,
+                Align::Center => feature.center().y,
+                Align::End => feature.max().y,
+            },
+            Direction::Down => match self.align {
+                Align::Start => feature.max().y,
+                Align::Center => feature.center().y,
+                Align::End => feature.min().y,
+            },
         }
     }
 }
@@ -58,6 +84,7 @@ where
                 Positioning {
                     side: Direction::Left,
                     centerline_adjustment: 0.0,
+                    align: Align::Center,
                 },
             ));
         }
@@ -67,6 +94,7 @@ where
                 Positioning {
                     side: Direction::Right,
                     centerline_adjustment: 0.0,
+                    align: Align::Center,
                 },
             ));
         }
@@ -94,6 +122,7 @@ where
             Positioning {
                 side: Direction::Left,
                 centerline_adjustment: 0.0,
+                align: Align::Center,
             },
         ));
 
@@ -112,6 +141,7 @@ where
             Positioning {
                 side: Direction::Right,
                 centerline_adjustment: 0.0,
+                align: Align::Center,
             },
         ));
 

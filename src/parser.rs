@@ -470,7 +470,7 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
 }
 
 fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
-    let (i, (_, side, _, offset, _, _)) = tuple((
+    let (i, (_, side, _, offset, _, align, _)) = tuple((
         multispace0,
         alt((
             tag_no_case("left"),
@@ -483,6 +483,17 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
         multispace0,
         opt(parse_float),
         multispace0,
+        opt(tuple((
+            multispace0,
+            tag_no_case("align"),
+            multispace0,
+            alt((
+                tag_no_case("center"),
+                tag_no_case("exterior"),
+                tag_no_case("interior"),
+            )),
+            multispace0,
+        ))),
         tag("=>"),
     ))(i)?;
 
@@ -499,6 +510,14 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
             centerline_adjustment: match offset {
                 Some(offset) => offset,
                 None => 0.0,
+            },
+            align: match align {
+                Some((_, _, _, align, _)) => match align.to_lowercase().as_str() {
+                    "exterior" => crate::Align::End,
+                    "interior" => crate::Align::Start,
+                    _ => crate::Align::Center,
+                },
+                _ => crate::Align::Center,
             },
         },
     ))
@@ -758,10 +777,12 @@ mod tests {
 
     #[test]
     fn test_wrap() {
-        let out = parse_geo("wrap (R<5>) with { left-0.5 => C<2>(h), right => C<2>(h4) }");
-        //eprintln!("{:?}", out);
+        let out =
+            parse_geo("wrap (R<5>) with { left-0.5 => C<2>(h), right align exterior => C<2>(h4) }");
+        eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
-            matches!(*inner, AST::Rect{ .. }) && features.len() == 2
+            matches!(*inner, AST::Rect{ .. }) && features.len() == 2 &&
+            features[1].0.align == crate::Align::End
         ));
 
         let out = parse_geo(
