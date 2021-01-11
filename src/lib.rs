@@ -12,6 +12,7 @@ use features::{Feature, InnerAtom};
 mod drill;
 mod gerber;
 mod parser;
+pub use parser::Err as SpecErr;
 
 /// Alignment of multiple elements in an array.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,7 +124,7 @@ impl<'a> Panel<'a> {
     }
 
     /// Adds the feature described by the given spec to the panel.
-    pub fn push_spec(&mut self, spec_str: &str) -> Result<(), ()> {
+    pub fn push_spec(&mut self, spec_str: &str) -> Result<(), SpecErr> {
         self.features.append(&mut parser::build(spec_str)?);
         Ok(())
     }

@@ -6,6 +6,24 @@ use nom::combinator::{map, opt};
 use nom::multi::{fold_many1, many0};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Default)]
+struct ResolverContext {
+    pub definitions: HashMap<String, AST>,
+}
+
+impl ResolverContext {
+    fn handle_assignment(&mut self, var: String, geo: Box<AST>) {
+        self.definitions.insert(var, *geo);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Err {
+    Syntax,
+    UndefinedVariable(String),
+}
 
 #[derive(Debug, Clone)]
 pub enum InnerAST {
@@ -13,7 +31,10 @@ pub enum InnerAST {
 }
 
 impl InnerAST {
-    fn into_inner_feature<'a>(self) -> Box<dyn super::features::InnerFeature + 'a> {
+    fn into_inner_feature<'a>(
+        self,
+        _ctx: &mut ResolverContext,
+    ) -> Box<dyn super::features::InnerFeature + 'a> {
         use super::features::ScrewHole;
 
         match self {
@@ -24,6 +45,8 @@ impl InnerAST {
 
 #[derive(Debug, Clone)]
 pub enum AST {
+    Assign(String, Box<AST>),
+    VarRef(String),
     Rect {
         coords: Option<(f64, f64)>,
         size: Option<(f64, f64)>,
@@ -56,7 +79,10 @@ pub enum AST {
 }
 
 impl AST {
-    fn into_feature<'a>(self) -> Box<dyn super::Feature + 'a> {
+    fn into_feature<'a>(
+        self,
+        ctx: &mut ResolverContext,
+    ) -> Result<Box<dyn super::Feature + 'a>, Err> {
         use super::features::{Circle, Rect, Triangle};
 
         match self {
@@ -65,70 +91,79 @@ impl AST {
                 size,
                 inner,
                 rounded: _,
-            } => {
-                if let Some(inner) = inner {
-                    let r = Rect::with_inner(inner.into_inner_feature());
-                    let (w, h) = if let Some((w, h)) = size {
-                        (w, h)
-                    } else {
-                        (2., 2.)
-                    };
-                    let r = if let Some(coords) = coords {
-                        r.dimensions(coords.into(), w, h)
-                    } else {
-                        r.dimensions([0., 0.].into(), w, h)
-                    };
-                    Box::new(r)
+            } => Ok(if let Some(inner) = inner {
+                let r = Rect::with_inner(inner.into_inner_feature(ctx));
+                let (w, h) = if let Some((w, h)) = size {
+                    (w, h)
                 } else {
-                    Box::new(match (coords, size) {
-                        (Some(c), Some(s)) => Rect::with_center(c.into(), s.0, s.1),
-                        (None, Some(s)) => Rect::with_center([0., 0.].into(), s.0, s.1),
-                        (Some(c), None) => Rect::with_center(c.into(), 2., 2.),
-                        (None, None) => Rect::with_center([-1f64, -1f64].into(), 2., 2.),
-                    })
-                }
-            }
+                    (2., 2.)
+                };
+                let r = if let Some(coords) = coords {
+                    r.dimensions(coords.into(), w, h)
+                } else {
+                    r.dimensions([0., 0.].into(), w, h)
+                };
+                Box::new(r)
+            } else {
+                Box::new(match (coords, size) {
+                    (Some(c), Some(s)) => Rect::with_center(c.into(), s.0, s.1),
+                    (None, Some(s)) => Rect::with_center([0., 0.].into(), s.0, s.1),
+                    (Some(c), None) => Rect::with_center(c.into(), 2., 2.),
+                    (None, None) => Rect::with_center([-1f64, -1f64].into(), 2., 2.),
+                })
+            }),
             AST::Circle {
                 coords,
                 radius,
                 inner,
-            } => match (inner, coords) {
-                (Some(i), Some(c)) => {
-                    Box::new(Circle::with_inner(i.into_inner_feature(), c.into(), radius))
-                }
+            } => Ok(match (inner, coords) {
+                (Some(i), Some(c)) => Box::new(Circle::with_inner(
+                    i.into_inner_feature(ctx),
+                    c.into(),
+                    radius,
+                )),
                 (Some(i), None) => {
-                    Box::new(Circle::wrap_with_radius(i.into_inner_feature(), radius))
+                    Box::new(Circle::wrap_with_radius(i.into_inner_feature(ctx), radius))
                 }
                 (None, Some(c)) => Box::new(Circle::new(c.into(), radius)),
                 (None, None) => Box::new(Circle::with_radius(radius)),
-            },
-            AST::Triangle { size, inner } => match inner {
-                Some(i) => Box::new(Triangle::with_inner(i.into_inner_feature()).dimensions(
+            }),
+            AST::Triangle { size, inner } => Ok(match inner {
+                Some(i) => Box::new(Triangle::with_inner(i.into_inner_feature(ctx)).dimensions(
                     [0., 0.].into(),
                     size.0,
                     size.1,
                 )),
                 None => Box::new(Triangle::right_angle(size.0, size.1)),
-            },
-            AST::Array { dir, num, inner } => Box::new(crate::features::repeating::Tile::new(
-                inner.into_feature(),
+            }),
+            AST::Array { dir, num, inner } => Ok(Box::new(crate::features::repeating::Tile::new(
+                inner.into_feature(ctx)?,
                 dir,
                 num,
-            )),
+            ))),
             AST::ColumnLayout {
                 align,
                 inners,
                 coords,
-            } => Box::new({
+            } => Ok(Box::new({
                 let mut layout = match align {
                     crate::Align::Start => crate::features::Column::align_left(
-                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                        inners
+                            .into_iter()
+                            .map(|i| i.into_feature(ctx))
+                            .collect::<Result<Vec<_>, Err>>()?,
                     ),
                     crate::Align::Center => crate::features::Column::align_center(
-                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                        inners
+                            .into_iter()
+                            .map(|i| i.into_feature(ctx))
+                            .collect::<Result<Vec<_>, Err>>()?,
                     ),
                     crate::Align::End => crate::features::Column::align_right(
-                        inners.into_iter().map(|i| i.into_feature()).collect(),
+                        inners
+                            .into_iter()
+                            .map(|i| i.into_feature(ctx))
+                            .collect::<Result<Vec<_>, Err>>()?,
                     ),
                 };
                 if let Some((x, y)) = coords {
@@ -136,16 +171,29 @@ impl AST {
                     layout.translate([x, y].into());
                 };
                 layout
-            }),
+            })),
             AST::Wrap { inner, features } => {
-                let mut pos = crate::features::AtPos::new(inner.into_feature());
+                let mut pos = crate::features::AtPos::new(inner.into_feature(ctx)?);
                 for (position, feature) in features {
-                    pos.push(feature.into_feature(), position);
+                    pos.push(feature.into_feature(ctx)?, position);
                 }
-                Box::new(pos)
+                Ok(Box::new(pos))
             }
+            AST::Assign(_, _) => unreachable!(),
+            AST::VarRef(ident) => match ctx.definitions.get(&ident) {
+                Some(ast) => ast.clone().into_feature(ctx),
+                None => Err(Err::UndefinedVariable(ident)),
+            },
         }
     }
+}
+
+fn parse_ident(i: &str) -> IResult<&str, String> {
+    let (i, _) = multispace0(i)?;
+    let (i, s) = take_while(|c| {
+        c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+    })(i)?;
+    Ok((i, s.into()))
 }
 
 fn parse_uint(i: &str) -> IResult<&str, usize> {
@@ -563,26 +611,61 @@ fn parse_wrap(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_assign(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (_, _, var, _, _, geo, _, _)) = tuple((
+        tag("let"),
+        multispace0,
+        parse_ident,
+        multispace0,
+        tag("="),
+        parse_geo,
+        multispace0,
+        opt(tag(";")),
+    ))(i)?;
+
+    Ok((i, AST::Assign(var, Box::new(geo))))
+}
+
+fn parse_var(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+    let (i, (_, var)) = tuple((tag("$"), parse_ident))(i)?;
+    Ok((i, AST::VarRef(var)))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
     alt((
+        parse_assign,
         parse_array,
         parse_rect,
         parse_circle,
         parse_triangle,
         parse_wrap,
         parse_column_layout,
+        parse_var,
     ))(i)
 }
 
 /// Parses the provided panel spec and returns the series of features
 /// it represents.
-pub fn build<'a>(i: &str) -> Result<Vec<Box<dyn super::Feature + 'a>>, ()> {
-    Ok(many0(parse_geo)(i)
-        .map_err(|_e| ())?
+pub fn build<'a>(i: &str) -> Result<Vec<Box<dyn super::Feature + 'a>>, Err> {
+    let mut ctx = ResolverContext::default();
+    many0(parse_geo)(i)
+        .map_err(|_e| Err::Syntax)?
         .1
         .into_iter()
-        .map(|g| g.into_feature())
-        .collect())
+        .map(|g| {
+            if let AST::Assign(var, geo) = g {
+                ctx.handle_assignment(var, geo);
+                None
+            } else {
+                Some(g.into_feature(&mut ctx))
+            }
+        })
+        .filter(|f| f.is_some())
+        .map(|f| f.unwrap())
+        .collect()
 }
 
 #[cfg(test)]
@@ -777,11 +860,12 @@ mod tests {
 
     #[test]
     fn test_wrap() {
-        let out =
-            parse_geo("wrap (R<5>) with { left-0.5 => C<2>(h), right align exterior => C<2>(h4) }");
+        let out = parse_geo(
+            "wrap ($inner) with { left-0.5 => C<2>(h), right align exterior => C<2>(h4) }",
+        );
         eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
-            matches!(*inner, AST::Rect{ .. }) && features.len() == 2 &&
+            matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
             features[1].0.align == crate::Align::End
         ));
 
@@ -795,5 +879,27 @@ mod tests {
             features[0].0.centerline_adjustment < -0.4 && features[0].0.centerline_adjustment > -0.6 &&
             features[1].0.centerline_adjustment > 0.4 && features[1].0.centerline_adjustment < 0.6
         ));
+    }
+
+    #[test]
+    fn test_var() {
+        let out = parse_geo("let bleh = C<25>");
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Assign(var, circ))) if
+            var == "bleh".to_string() && matches!(*circ, AST::Circle{ .. })));
+
+        let out = parse_geo("$bleh");
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::VarRef(var))) if var == "bleh".to_string()));
+
+        let out = build(
+            "let rect = column center {
+          [12] R<7.5>(h)
+          [11] R<7.5>(h)
+          [12] R<7.5>(h)
+        }$rect",
+        );
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(features) if features.len() == 1));
     }
 }
