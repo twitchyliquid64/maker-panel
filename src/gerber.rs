@@ -82,21 +82,21 @@ pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
                 let x = CoordinateNumber::try_from(point.x()).unwrap();
                 let y = CoordinateNumber::try_from(point.y()).unwrap();
 
-                match (
-                    ((last.x() - point.x()).abs() < 1.0E-6),
-                    ((last.y() - point.y()).abs() < 1.0E-6),
-                ) {
+                let (dx, dy) = (point.x() - last.x(), point.y() - last.y());
+                match (dx < 1.0E-7 && dx > -1.0E-7, dy < 1.0E-7 && dy > -1.0E-7) {
                     (true, true) => None,
                     (_, true) => Some(
+                        // Y is the same, X has changed
                         FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                            Coordinates::at_y(y, cf),
+                            Coordinates::at_x(x, cf),
                             None,
                         )))
                         .into(),
                     ),
                     (true, _) => Some(
+                        // X is the same, Y has changed
                         FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                            Coordinates::at_x(x, cf),
+                            Coordinates::at_y(y, cf),
                             None,
                         )))
                         .into(),
