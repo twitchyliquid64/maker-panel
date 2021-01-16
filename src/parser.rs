@@ -29,6 +29,7 @@ pub enum Err {
 pub enum InnerAST {
     ScrewHole(f64),
     Smiley,
+    MechanicalSolderPoint(Option<(f64, f64)>),
 }
 
 impl InnerAST {
@@ -36,11 +37,15 @@ impl InnerAST {
         self,
         _ctx: &mut ResolverContext,
     ) -> Box<dyn super::features::InnerFeature + 'a> {
-        use super::features::{ScrewHole, Smiley};
+        use super::features::{MechanicalSolderPoint, ScrewHole, Smiley};
 
         match self {
             InnerAST::ScrewHole(dia) => Box::new(ScrewHole::with_diameter(dia)),
             InnerAST::Smiley => Box::new(Smiley::default()),
+            InnerAST::MechanicalSolderPoint(sz) => Box::new(match sz {
+                Some(sz) => MechanicalSolderPoint::with_size(sz),
+                None => MechanicalSolderPoint::default(),
+            }),
         }
     }
 }
@@ -245,11 +250,32 @@ fn parse_inner(i: &str) -> IResult<&str, InnerAST> {
             }),
             map(tag("h"), |_| InnerAST::ScrewHole(3.1)),
             map(tag("smiley"), |_| InnerAST::Smiley),
+            parse_inner_msp,
         )),
         tuple((multispace0, tag(")"))),
     )(i)?;
 
     Ok((i, inner))
+}
+
+fn parse_inner_msp(i: &str) -> IResult<&str, InnerAST> {
+    let (i, _) = tag_no_case("msp")(i)?;
+    match parse_details(i) {
+        Ok((i2, deets)) => {
+            let size = if let Some((x, y)) = deets.size {
+                Some((x, y))
+            } else if deets.extra.len() == 2 {
+                Some((deets.extra[0], deets.extra[1]))
+            } else if deets.extra.len() == 1 {
+                Some((deets.extra[0], deets.extra[0]))
+            } else {
+                None
+            };
+
+            Ok((i2, InnerAST::MechanicalSolderPoint(size)))
+        }
+        Err(_) => Ok((i, InnerAST::MechanicalSolderPoint(None))),
+    }
 }
 
 enum DetailFragment {
@@ -780,6 +806,30 @@ mod tests {
                 r > 3.49 && r < 3.51 && dia > 8.999 && dia < 9.001
             )
         );
+    }
+
+    #[test]
+    fn test_msp() {
+        let out = parse_geo("C<5>(msp)");
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::Circle {
+                    inner: Some(InnerAST::MechanicalSolderPoint(None)),
+                    ..
+                },
+            ))
+        ));
+
+        let out = parse_geo("C<5>(msp<2,1>)");
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::Circle { inner: Some(InnerAST::MechanicalSolderPoint(Some((w, h)))), .. },
+            )) if w > 1.99 && w < 2.01 && h > 0.99 && h < 1.01
+        ));
     }
 
     #[test]

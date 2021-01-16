@@ -6,6 +6,7 @@ use std::fmt;
 
 mod array;
 mod circle;
+mod mechanical_solder_point;
 mod pos;
 mod rect;
 pub mod repeating;
@@ -15,6 +16,7 @@ mod triangle;
 mod unit;
 pub use array::Column;
 pub use circle::Circle;
+pub use mechanical_solder_point::MechanicalSolderPoint;
 pub use pos::{AtPos, Positioning};
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
