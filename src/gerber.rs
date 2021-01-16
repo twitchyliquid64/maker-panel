@@ -9,10 +9,16 @@ use std::collections::HashMap;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
+#[derive(Debug, Clone, Copy)]
+enum ApertureType {
+    Circle(f64),
+    Rect(f64, f64),
+}
+
 fn gerber_prelude<'a>(
     cf: CoordinateFormat,
     ff: FileFunction,
-    apertures: impl Iterator<Item = &'a (i32, f64)>,
+    apertures: impl Iterator<Item = &'a (i32, ApertureType)>,
 ) -> Vec<Command> {
     let mut commands =
         vec![
@@ -29,14 +35,21 @@ fn gerber_prelude<'a>(
             FunctionCode::GCode(GCode::InterpolationMode(InterpolationMode::Linear)).into(),
         ];
 
-    for (code, diameter) in apertures {
+    for (code, shape) in apertures {
         commands.push(
             ExtendedCode::ApertureDefinition(ApertureDefinition {
                 code: *code,
-                aperture: Aperture::Circle(Circle {
-                    diameter: *diameter,
-                    hole_diameter: None,
-                }),
+                aperture: match shape {
+                    ApertureType::Circle(diameter) => Aperture::Circle(Circle {
+                        diameter: *diameter,
+                        hole_diameter: None,
+                    }),
+                    ApertureType::Rect(x, y) => Aperture::Rectangle(Rectangular {
+                        x: *x,
+                        y: *y,
+                        hole_diameter: None,
+                    }),
+                },
             })
             .into(),
         );
@@ -51,7 +64,7 @@ pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
     let mut commands = gerber_prelude(
         cf,
         FileFunction::Profile(Profile::NonPlated),
-        [(10, 0.01)].iter(),
+        [(10, ApertureType::Circle(0.01))].iter(),
     );
     commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
 
@@ -141,13 +154,20 @@ pub fn serialize_layer(
 ) -> Result<Vec<Command>, ()> {
     let cf = CoordinateFormat::new(4, 6);
 
-    // Collect all unique diameters to setup as apertures.
+    // Collect all unique sizes to setup as apertures.
     let mut dias = HashMap::new();
+    let mut rects = HashMap::new();
+
     for feature in &features {
         match feature {
             InnerAtom::Circle { radius, layer, .. } => {
                 if out_layer == *layer {
                     dias.insert(FloatBits(*radius * 2.0), ());
+                }
+            }
+            InnerAtom::Rect { rect, layer } => {
+                if out_layer == *layer {
+                    rects.insert((FloatBits(rect.width()), FloatBits(rect.height())), ());
                 }
             }
             InnerAtom::Drill { .. } => (), // Drill hits are not on gerbers
@@ -156,9 +176,16 @@ pub fn serialize_layer(
                                            // }
         }
     }
-    let dias: Vec<_> = dias
+
+    // Assign codes to each aperture.
+    let apertures: Vec<(i32, ApertureType)> = dias
         .keys()
-        .map(|fb| fb.0)
+        .map(|fb| ApertureType::Circle(fb.0))
+        .chain(
+            rects
+                .keys()
+                .map(|(xfb, yfb)| ApertureType::Rect(xfb.0, yfb.0)),
+        )
         .enumerate()
         .map(|(i, f)| (10 + i as i32, f))
         .collect();
@@ -193,7 +220,7 @@ pub fn serialize_layer(
                 index: None,
             },
         },
-        dias.iter(),
+        apertures.iter(),
     );
 
     let mut last_aperture: Option<i32> = None;
@@ -206,7 +233,7 @@ pub fn serialize_layer(
                 ..
             } => {
                 if out_layer == *layer {
-                    let code = dias.iter().find(|&(_, f)| *f == (*radius * 2.0)).unwrap().0;
+                    let code = apertures.iter().find(|&(_, f)| matches!(f, ApertureType::Circle(f)  if *f == (*radius * 2.0))).unwrap().0;
                     if last_aperture != Some(code) {
                         commands.push(FunctionCode::DCode(DCode::SelectAperture(code)).into());
                         last_aperture = Some(code);
@@ -214,6 +241,24 @@ pub fn serialize_layer(
 
                     let x = CoordinateNumber::try_from(center.x).unwrap();
                     let y = CoordinateNumber::try_from(center.y).unwrap();
+                    commands.push(gerber_types::Command::FunctionCode(
+                        FunctionCode::DCode(DCode::Operation(Operation::Flash(Coordinates::new(
+                            x, y, cf,
+                        ))))
+                        .into(),
+                    ));
+                }
+            }
+            InnerAtom::Rect { rect, layer } => {
+                if out_layer == *layer {
+                    let code = apertures.iter().find(|&(_, f)| matches!(f, ApertureType::Rect(x, y)  if *x == rect.width() && *y == rect.height())).unwrap().0;
+                    if last_aperture != Some(code) {
+                        commands.push(FunctionCode::DCode(DCode::SelectAperture(code)).into());
+                        last_aperture = Some(code);
+                    }
+
+                    let x = CoordinateNumber::try_from(rect.center().x).unwrap();
+                    let y = CoordinateNumber::try_from(rect.center().y).unwrap();
                     commands.push(gerber_types::Command::FunctionCode(
                         FunctionCode::DCode(DCode::Operation(Operation::Flash(Coordinates::new(
                             x, y, cf,

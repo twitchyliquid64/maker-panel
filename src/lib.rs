@@ -12,6 +12,11 @@ use features::{Feature, InnerAtom};
 mod drill;
 mod gerber;
 mod parser;
+#[cfg(feature = "tessellate")]
+mod tessellate;
+#[cfg(feature = "tessellate")]
+pub use tessellate::{Point as TPoint, TessellationError, VertexBuffers};
+
 pub use parser::Err as SpecErr;
 
 /// Alignment of multiple elements in an array.
@@ -38,7 +43,7 @@ impl Layer {
         match self {
             Layer::FrontCopper => usvg::Color::new(0x84, 0, 0),
             Layer::FrontMask => usvg::Color::new(0x84, 0, 0x84),
-            Layer::FrontLegend => usvg::Color::new(0, 0, 0x84),
+            Layer::FrontLegend => usvg::Color::new(0, 0xce, 0xde),
             Layer::BackCopper => usvg::Color::new(0, 0x84, 0),
             Layer::BackMask => usvg::Color::new(0x84, 0, 0x84),
             Layer::BackLegend => usvg::Color::new(0x4, 0, 0x84),
@@ -83,6 +88,8 @@ pub enum Err {
     NoFeatures,
     BadEdgeGeometry(String),
     InternalGerberFailure,
+    #[cfg(feature = "tessellate")]
+    TessellationError(TessellationError),
 }
 
 /// Combines features into single geometry.
@@ -158,7 +165,12 @@ impl<'a> Panel<'a> {
 
                 let poly = geo::Polygon::new(
                     convex_hull::graham::graham_hull(points.as_mut_slice(), true),
-                    vec![],
+                    edges
+                        .iter()
+                        .map(|p| p.interiors())
+                        .flatten()
+                        .map(|p| p.clone())
+                        .collect::<Vec<_>>(),
                 );
 
                 Some((vec![poly]).into())
@@ -226,6 +238,21 @@ impl<'a> Panel<'a> {
         drill::serialize(&self.interior_geometry(), w, want_plated)
     }
 
+    /// Computes the 2d tessellation of the panel.
+    #[cfg(feature = "tessellate")]
+    pub fn tessellate_2d(&self) -> Result<VertexBuffers<TPoint, u16>, Err> {
+        Ok(
+            tessellate::tessellate_2d(self.edge_poly()?, self.interior_geometry())
+                .map_err(|e| Err::TessellationError(e))?,
+        )
+    }
+
+    /// Computes the 3d tessellation of the panel.
+    #[cfg(feature = "tessellate")]
+    pub fn tessellate_3d(&self) -> Result<(Vec<[f64; 3]>, Vec<u16>), Err> {
+        Ok(tessellate::tessellate_3d(self.tessellate_2d()?))
+    }
+
     /// Produces an SVG tree rendering the panel.
     pub fn make_svg(&self) -> Result<usvg::Tree, Err> {
         let edges = self.edge_poly()?;
@@ -267,6 +294,18 @@ impl<'a> Panel<'a> {
             match inner {
                 InnerAtom::Circle { center, radius, .. } => {
                     let p = circle(center, radius);
+                    rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                        stroke: inner.stroke(),
+                        fill: inner.fill(),
+                        data: std::rc::Rc::new(p),
+                        ..usvg::Path::default()
+                    }));
+                }
+                InnerAtom::Rect {
+                    rect: rect_pos,
+                    layer: _,
+                } => {
+                    let p = rect(rect_pos);
                     rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
                         stroke: inner.stroke(),
                         fill: inner.fill(),
@@ -329,6 +368,17 @@ fn circle(center: Coordinate<f64>, radius: f64) -> usvg::PathData {
         center.x + radius,
         center.y,
     );
+    p.push_close_path();
+    p
+}
+
+fn rect(rect: geo::Rect<f64>) -> usvg::PathData {
+    let mut p = usvg::PathData::with_capacity(5);
+    p.push_move_to(rect.min().x, rect.min().y);
+    p.push_line_to(rect.max().x, rect.min().y);
+    p.push_line_to(rect.max().x, rect.max().y);
+    p.push_line_to(rect.min().x, rect.max().y);
+    p.push_line_to(rect.min().x, rect.min().y);
     p.push_close_path();
     p
 }

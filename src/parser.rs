@@ -28,6 +28,7 @@ pub enum Err {
 #[derive(Debug, Clone)]
 pub enum InnerAST {
     ScrewHole(f64),
+    Smiley,
 }
 
 impl InnerAST {
@@ -35,10 +36,11 @@ impl InnerAST {
         self,
         _ctx: &mut ResolverContext,
     ) -> Box<dyn super::features::InnerFeature + 'a> {
-        use super::features::ScrewHole;
+        use super::features::{ScrewHole, Smiley};
 
         match self {
             InnerAST::ScrewHole(dia) => Box::new(ScrewHole::with_diameter(dia)),
+            InnerAST::Smiley => Box::new(Smiley::default()),
         }
     }
 }
@@ -240,6 +242,7 @@ fn parse_inner(i: &str) -> IResult<&str, InnerAST> {
                 InnerAST::ScrewHole(f)
             }),
             map(tag("h"), |_| InnerAST::ScrewHole(3.1)),
+            map(tag("smiley"), |_| InnerAST::Smiley),
         )),
         tuple((multispace0, tag(")"))),
     )(i)?;

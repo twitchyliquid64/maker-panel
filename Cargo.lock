@@ -197,6 +197,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee2626afccd7561a06cf1367e2950c4718ea04565e20fb5029b6c7d8ad09abcf"
 
 [[package]]
+name = "euclid"
+version = "0.22.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5337024b8293bdce5265dc9570ef6e608a34bfacbbc87fe1a5dcb5f1dac2f4e2"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -213,6 +222,15 @@ name = "float-cmp"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75224bec9bfe1a65e2d34132933f2de7fe79900c96a0174307554244ece8150e"
+
+[[package]]
+name = "float-cmp"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "float_next_after"
@@ -417,16 +435,69 @@ dependencies = [
 ]
 
 [[package]]
+name = "lyon"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b155165bdd52011118a39433bee2cbbc7064b6eacf38a22ac90474113e3f99fa"
+dependencies = [
+ "lyon_algorithms",
+ "lyon_tessellation",
+]
+
+[[package]]
+name = "lyon_algorithms"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac507017460ad0b92198503945cb164e71465cdfd84063f5eed9af9356ccd093"
+dependencies = [
+ "lyon_path",
+ "sid",
+]
+
+[[package]]
+name = "lyon_geom"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb987cd391542608ca8d43c0cd5ec44ebe4a0957eb89769a316c99d7fe14537"
+dependencies = [
+ "arrayvec",
+ "euclid",
+ "num-traits",
+]
+
+[[package]]
+name = "lyon_path"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23d64beb93be63439bc744041d132d62fdec831181eeb474f675e5f6a81f5ac1"
+dependencies = [
+ "lyon_geom",
+]
+
+[[package]]
+name = "lyon_tessellation"
+version = "0.17.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2133ee881f9c08ffae9bf866ef56204ab6da4ccb2b2b37963c14b028d798fd41"
+dependencies = [
+ "arrayvec",
+ "lyon_path",
+ "sid",
+]
+
+[[package]]
 name = "maker-panel"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "conv",
  "dyn-clone",
  "geo",
  "geo-booleanop",
  "gerber-types",
+ "lyon",
  "nom",
  "resvg",
+ "stl_io",
  "structopt",
  "test-case",
  "typenum",
@@ -736,6 +807,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sid"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd5ac56c121948b4879bba9e519852c211bcdd8f014efff766441deff0b91bdb"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "simplecss"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -761,6 +841,16 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
+
+[[package]]
+name = "stl_io"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c68e41108b3ec269d885cc56af66cd15f1392f68d2ae461df86d7d3285f065d"
+dependencies = [
+ "byteorder",
+ "float-cmp 0.8.0",
+]
 
 [[package]]
 name = "strsim"
@@ -798,7 +888,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3016b3217b82ea3bb7cd3b773030222c6acca46c52ef4e64b4e716bd4b25090e"
 dependencies = [
- "float-cmp",
+ "float-cmp 0.5.3",
  "rgb",
 ]
 
@@ -808,7 +898,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c536faaff1a10837cfe373142583f6e27d81e96beba339147e77b67c9f260ff"
 dependencies = [
- "float-cmp",
+ "float-cmp 0.5.3",
  "siphasher",
 ]
 

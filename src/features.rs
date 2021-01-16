@@ -10,6 +10,7 @@ mod pos;
 mod rect;
 pub mod repeating;
 mod screw_hole;
+mod smiley;
 mod triangle;
 mod unit;
 pub use array::Column;
@@ -17,6 +18,7 @@ pub use circle::Circle;
 pub use pos::{AtPos, Positioning};
 pub use rect::Rect;
 pub use screw_hole::ScrewHole;
+pub use smiley::Smiley;
 pub use triangle::Triangle;
 pub use unit::Unit;
 
@@ -106,6 +108,10 @@ pub enum InnerAtom {
         radius: f64,
         layer: super::Layer,
     },
+    Rect {
+        rect: geo::Rect<f64>,
+        layer: super::Layer,
+    },
 }
 
 impl InnerAtom {
@@ -128,6 +134,10 @@ impl InnerAtom {
                 ..usvg::Fill::default()
             }),
             InnerAtom::Circle { layer, .. } => Some(usvg::Fill {
+                paint: usvg::Paint::Color(layer.color()),
+                ..usvg::Fill::default()
+            }),
+            InnerAtom::Rect { layer, .. } => Some(usvg::Fill {
                 paint: usvg::Paint::Color(layer.color()),
                 ..usvg::Fill::default()
             }),
@@ -156,6 +166,7 @@ impl InnerAtom {
                     y: center.y + radius,
                 },
             ),
+            InnerAtom::Rect { rect, .. } => rect.clone(),
         }
     }
 
@@ -166,6 +177,10 @@ impl InnerAtom {
             }
             InnerAtom::Circle { center, .. } => {
                 *center = *center + Coordinate { x, y };
+            }
+            InnerAtom::Rect { rect, .. } => {
+                use geo::algorithm::translate::Translate;
+                rect.translate_inplace(x, y);
             }
         }
     }
