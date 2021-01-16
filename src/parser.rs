@@ -49,6 +49,7 @@ impl InnerAST {
 pub enum AST {
     Assign(String, Box<AST>),
     VarRef(String),
+    Comment(String),
     Rect {
         coords: Option<(f64, f64)>,
         size: Option<(f64, f64)>,
@@ -182,6 +183,7 @@ impl AST {
                 Ok(Box::new(pos))
             }
             AST::Assign(_, _) => unreachable!(),
+            AST::Comment(_) => unreachable!(),
             AST::VarRef(ident) => match ctx.definitions.get(&ident) {
                 Some(ast) => ast.clone().into_feature(ctx),
                 None => Err(Err::UndefinedVariable(ident)),
@@ -637,6 +639,13 @@ fn parse_var(i: &str) -> IResult<&str, AST> {
     Ok((i, AST::VarRef(var)))
 }
 
+pub fn parse_comment(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+    let (i, _) = tag("#")(i)?;
+    let (i, v) = take_while(|chr| chr != '\n')(i)?;
+    Ok((i, AST::Comment(v.to_string())))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
     alt((
         parse_assign,
@@ -647,6 +656,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
         parse_wrap,
         parse_column_layout,
         parse_var,
+        parse_comment,
     ))(i)
 }
 
@@ -658,13 +668,13 @@ pub fn build<'a>(i: &str) -> Result<Vec<Box<dyn super::Feature + 'a>>, Err> {
         .map_err(|_e| Err::Syntax)?
         .1
         .into_iter()
-        .map(|g| {
-            if let AST::Assign(var, geo) = g {
+        .map(|g| match g {
+            AST::Assign(var, geo) => {
                 ctx.handle_assignment(var, geo);
                 None
-            } else {
-                Some(g.into_feature(&mut ctx))
             }
+            AST::Comment(_) => None,
+            _ => Some(g.into_feature(&mut ctx)),
         })
         .filter(|f| f.is_some())
         .map(|f| f.unwrap())
