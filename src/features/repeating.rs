@@ -7,16 +7,25 @@ pub struct Tile<U = super::Rect> {
     inner: U,
     direction: crate::Direction,
     amt: usize,
+    v_score: bool,
 }
 
 impl<U: super::Feature> Tile<U> {
     /// Constructs a new tiling feature.
     pub fn new(inner: U, direction: crate::Direction, amt: usize) -> Self {
+        let v_score = false;
         Self {
             inner,
             direction,
             amt,
+            v_score,
         }
+    }
+
+    /// Returns a new tiling feature with the given v-score setting.
+    pub fn v_score(mut self, v_score: bool) -> Self {
+        self.v_score = v_score;
+        self
     }
 }
 
@@ -72,18 +81,36 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
             None => {
                 use geo::{bounding_rect::BoundingRect, Geometry, GeometryCollection};
                 let bounds = Geometry::GeometryCollection(GeometryCollection(
-                    inner.iter().map(|a| Geometry::Rect(a.bounds())).collect(),
+                    inner
+                        .iter()
+                        .map(|a| a.bounds())
+                        .filter(|b| b.is_some())
+                        .map(|b| Geometry::Rect(b.unwrap()))
+                        .collect(),
                 ));
                 bounds.bounding_rect().unwrap()
             }
         };
 
         for i in 0..self.amt {
+            let (x, y) = self.direction.offset(bounds);
+            let (x, y) = (i as f64 * x, i as f64 * y);
+
             for v in inner.iter() {
                 let mut v = v.clone();
-                let (x, y) = self.direction.offset(bounds);
-                v.translate(i as f64 * x, i as f64 * y);
+                v.translate(x, y);
                 out.push(v);
+            }
+
+            if self.v_score && i < self.amt - 1 {
+                let (x, y) = (x + bounds.width() / 2., y + bounds.height() / 2.);
+
+                out.push(match self.direction {
+                    crate::Direction::Left | crate::Direction::Right => {
+                        super::InnerAtom::VScoreV(x)
+                    }
+                    crate::Direction::Down | crate::Direction::Up => super::InnerAtom::VScoreH(y),
+                })
             }
         }
         out

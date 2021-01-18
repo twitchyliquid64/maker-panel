@@ -16,6 +16,8 @@ mod parser;
 mod tessellate;
 #[cfg(feature = "tessellate")]
 pub use tessellate::{Point as TPoint, TessellationError, VertexBuffers};
+#[cfg(feature = "text")]
+mod text;
 
 pub use parser::Err as SpecErr;
 
@@ -36,6 +38,7 @@ pub enum Layer {
     BackCopper,
     BackMask,
     BackLegend,
+    FabricationInstructions,
 }
 
 impl Layer {
@@ -47,6 +50,7 @@ impl Layer {
             Layer::BackCopper => usvg::Color::new(0, 0x84, 0),
             Layer::BackMask => usvg::Color::new(0x84, 0, 0x84),
             Layer::BackLegend => usvg::Color::new(0x4, 0, 0x84),
+            Layer::FabricationInstructions => usvg::Color::new(0x66, 0x66, 0x66),
         }
     }
 }
@@ -221,7 +225,11 @@ impl<'a> Panel<'a> {
         layer: Layer,
         w: &mut W,
     ) -> Result<(), Err> {
-        let commands = gerber::serialize_layer(layer, self.interior_geometry())
+        use geo::bounding_rect::BoundingRect;
+        let edges = self.edge_poly()?;
+        let bounds = edges.bounding_rect().unwrap();
+
+        let commands = gerber::serialize_layer(layer, self.interior_geometry(), bounds)
             .map_err(|_| Err::InternalGerberFailure)?;
         use gerber_types::GerberCode;
         commands
@@ -253,13 +261,48 @@ impl<'a> Panel<'a> {
         Ok(tessellate::tessellate_3d(self.tessellate_2d()?))
     }
 
+    /// Expands the bounds of the drawing area to give space to any
+    /// mechanical / fabrication markings.
+    fn expanded_bounds(&self, bounds: geo::Rect<f64>) -> geo::Rect<f64> {
+        let ig = self.interior_geometry();
+        let has_h_scores = ig.iter().any(|g| matches!(g, InnerAtom::VScoreH(_)));
+        let has_v_scores = ig.iter().any(|g| matches!(g, InnerAtom::VScoreV(_)));
+
+        match (has_h_scores, has_v_scores) {
+            (true, true) => geo::Rect::<f64>::new(
+                bounds.min() - [10., 15.].into(),
+                bounds.max() + [65., 65.].into(),
+            ),
+            (true, false) => geo::Rect::<f64>::new(
+                bounds.min() - [10., 5.].into(),
+                bounds.max() + [65., 5.].into(),
+            ),
+            (false, true) => geo::Rect::<f64>::new(
+                bounds.min() - [5., 15.].into(),
+                bounds.max() + [5., 65.].into(),
+            ),
+            _ => bounds,
+        }
+    }
+
+    /// Indicates if the panel has fabrication instructions, such as
+    /// V-score lines.
+    pub fn has_fab_markings(&self) -> bool {
+        let ig = self.interior_geometry();
+        let has_h_scores = ig.iter().any(|g| matches!(g, InnerAtom::VScoreH(_)));
+        let has_v_scores = ig.iter().any(|g| matches!(g, InnerAtom::VScoreV(_)));
+
+        has_h_scores || has_v_scores
+    }
+
     /// Produces an SVG tree rendering the panel.
     pub fn make_svg(&self) -> Result<usvg::Tree, Err> {
         let edges = self.edge_poly()?;
         use geo::bounding_rect::BoundingRect;
         let bounds = edges.bounding_rect().unwrap();
+        let img_bounds = self.expanded_bounds(bounds);
 
-        let size = usvg::Size::new(bounds.width(), bounds.height()).unwrap();
+        let size = usvg::Size::new(img_bounds.width(), img_bounds.height()).unwrap();
         let rtree = usvg::Tree::create(usvg::Svg {
             size,
             view_box: usvg::ViewBox {
@@ -315,6 +358,36 @@ impl<'a> Panel<'a> {
                 }
                 InnerAtom::Drill { center, radius, .. } => {
                     let p = circle(center, radius);
+                    rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                        stroke: inner.stroke(),
+                        fill: inner.fill(),
+                        data: std::rc::Rc::new(p),
+                        ..usvg::Path::default()
+                    }));
+                }
+
+                InnerAtom::VScoreH(y) => {
+                    let mut p = usvg::PathData::with_capacity(2);
+                    p.push_move_to(bounds.min().x - 4., y);
+                    p.push_line_to(bounds.max().x + 4., y);
+                    rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                        stroke: inner.stroke(),
+                        fill: inner.fill(),
+                        data: std::rc::Rc::new(p),
+                        ..usvg::Path::default()
+                    }));
+                    rtree
+                        .root()
+                        .append_kind(usvg::NodeKind::Image(text::blit_text_span(
+                            bounds.max().x,
+                            y,
+                            "v-score".into(),
+                        )));
+                }
+                InnerAtom::VScoreV(x) => {
+                    let mut p = usvg::PathData::with_capacity(2);
+                    p.push_move_to(x, bounds.min().y - 4.);
+                    p.push_line_to(x, bounds.max().y + 4.);
                     rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
                         stroke: inner.stroke(),
                         fill: inner.fill(),
@@ -430,10 +503,10 @@ mod tests {
 
         // eprintln!("{:?}", panel.interior_geometry());
         for i in 0..5 {
-            assert!(panel.interior_geometry()[i].bounds().center().x > 2.49);
-            assert!(panel.interior_geometry()[i].bounds().center().x < 2.51);
-            assert!(panel.interior_geometry()[i].bounds().center().y < -2.49);
-            assert!(panel.interior_geometry()[i].bounds().center().y > -2.51);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x > 2.49);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x < 2.51);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y < -2.49);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > -2.51);
         }
     }
 
@@ -469,20 +542,20 @@ mod tests {
         panel.push_spec("C<5>(h2)").unwrap();
 
         for i in 0..5 {
-            assert!(panel.interior_geometry()[i].bounds().center().x > -0.01);
-            assert!(panel.interior_geometry()[i].bounds().center().x < 0.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y < 0.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y > -0.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x > -0.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x < 0.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y < 0.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > -0.01);
         }
 
         let mut panel = Panel::new();
         panel.push_spec("C<@(1, 1), 1>(h2)").unwrap();
         // eprintln!("{:?}", panel.interior_geometry());
         for i in 0..5 {
-            assert!(panel.interior_geometry()[i].bounds().center().x > 0.99);
-            assert!(panel.interior_geometry()[i].bounds().center().x < 1.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y < 1.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y > 0.99);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x > 0.99);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x < 1.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y < 1.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > 0.99);
         }
     }
 
@@ -502,16 +575,16 @@ mod tests {
         ));
 
         for i in 0..5 {
-            assert!(panel.interior_geometry()[i].bounds().center().x < 3.01);
-            assert!(panel.interior_geometry()[i].bounds().center().x > 2.99);
-            assert!(panel.interior_geometry()[i].bounds().center().y < 2.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y > -2.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x < 3.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x > 2.99);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y < 2.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > -2.01);
         }
         for i in 5..10 {
-            assert!(panel.interior_geometry()[i].bounds().center().x < 5.01);
-            assert!(panel.interior_geometry()[i].bounds().center().x > 4.99);
-            assert!(panel.interior_geometry()[i].bounds().center().y < 2.01);
-            assert!(panel.interior_geometry()[i].bounds().center().y > -2.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x < 5.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().x > 4.99);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y < 2.01);
+            assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > -2.01);
         }
     }
 }

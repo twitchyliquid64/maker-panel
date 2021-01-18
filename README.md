@@ -87,3 +87,7 @@ Makes this:
 <p align="center">
   <img alt="Example 1" src="examples/ex1.png" width="60%">
 </p>
+
+# License
+
+MIT License. Raster font is from http://uzebox.org/, itself licensed under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).

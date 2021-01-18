@@ -114,17 +114,20 @@ pub enum InnerAtom {
         rect: geo::Rect<f64>,
         layer: super::Layer,
     },
+    VScoreH(f64),
+    VScoreV(f64),
 }
 
 impl InnerAtom {
     pub fn stroke(&self) -> Option<usvg::Stroke> {
         match self {
-            // InnerAtom::Circle { layer, .. } => Some(usvg::Stroke {
-            //     paint: usvg::Paint::Color(layer.color()),
-            //     width: usvg::StrokeWidth::new(0.1),
-            //     opacity: usvg::Opacity::new(0.5),
-            //     ..usvg::Stroke::default()
-            // }),
+            InnerAtom::VScoreH(_) | InnerAtom::VScoreV(_) => Some(usvg::Stroke {
+                paint: usvg::Paint::Color(usvg::Color::new(0x6, 0x6, 0x6)),
+                width: usvg::StrokeWidth::new(0.1),
+                opacity: usvg::Opacity::new(0.5),
+                dasharray: Some(vec![0.8, 0.8]),
+                ..usvg::Stroke::default()
+            }),
             _ => None,
         }
     }
@@ -143,12 +146,13 @@ impl InnerAtom {
                 paint: usvg::Paint::Color(layer.color()),
                 ..usvg::Fill::default()
             }),
+            InnerAtom::VScoreH(_) | InnerAtom::VScoreV(_) => None,
         }
     }
 
-    pub fn bounds(&self) -> geo::Rect<f64> {
+    pub fn bounds(&self) -> Option<geo::Rect<f64>> {
         match self {
-            InnerAtom::Drill { center, radius, .. } => geo::Rect::new(
+            InnerAtom::Drill { center, radius, .. } => Some(geo::Rect::new(
                 Coordinate {
                     x: center.x - radius,
                     y: center.y - radius,
@@ -157,8 +161,8 @@ impl InnerAtom {
                     x: center.x + radius,
                     y: center.y + radius,
                 },
-            ),
-            InnerAtom::Circle { center, radius, .. } => geo::Rect::new(
+            )),
+            InnerAtom::Circle { center, radius, .. } => Some(geo::Rect::new(
                 Coordinate {
                     x: center.x - radius,
                     y: center.y - radius,
@@ -167,8 +171,9 @@ impl InnerAtom {
                     x: center.x + radius,
                     y: center.y + radius,
                 },
-            ),
-            InnerAtom::Rect { rect, .. } => rect.clone(),
+            )),
+            InnerAtom::Rect { rect, .. } => Some(rect.clone()),
+            InnerAtom::VScoreH(_) | InnerAtom::VScoreV(_) => None,
         }
     }
 
@@ -183,6 +188,12 @@ impl InnerAtom {
             InnerAtom::Rect { rect, .. } => {
                 use geo::algorithm::translate::Translate;
                 rect.translate_inplace(x, y);
+            }
+            InnerAtom::VScoreH(ref mut y2) => {
+                *y2 = *y2 + y;
+            }
+            InnerAtom::VScoreV(ref mut x2) => {
+                *x2 = *x2 + x;
             }
         }
     }

@@ -74,6 +74,7 @@ pub enum AST {
         dir: crate::Direction,
         num: usize,
         inner: Box<AST>,
+        vscore: bool,
     },
     ColumnLayout {
         coords: Option<(f64, f64)>,
@@ -144,11 +145,15 @@ impl AST {
                 )),
                 None => Box::new(Triangle::right_angle(size.0, size.1)),
             }),
-            AST::Array { dir, num, inner } => Ok(Box::new(crate::features::repeating::Tile::new(
-                inner.into_feature(ctx)?,
+            AST::Array {
                 dir,
                 num,
-            ))),
+                inner,
+                vscore,
+            } => Ok(Box::new(
+                crate::features::repeating::Tile::new(inner.into_feature(ctx)?, dir, num)
+                    .v_score(vscore),
+            )),
             AST::ColumnLayout {
                 align,
                 inners,
@@ -474,12 +479,18 @@ fn parse_array(i: &str) -> IResult<&str, AST> {
         tuple((
             parse_uint,
             opt(tuple((multispace0, tag(";"), multispace0, one_of("UDRL")))),
+            opt(tuple((
+                multispace0,
+                tag(";"),
+                multispace0,
+                alt((tag_no_case("vscore"), tag_no_case("v-score"))),
+            ))),
         )),
         tuple((tag("]"), multispace0)),
     )(i)?;
     let (i, geo) = parse_geo(i)?;
 
-    let (num, dir) = params;
+    let (num, dir, vscore) = params;
     let dir = if let Some((_, _, _, s)) = dir {
         match s {
             'L' => crate::Direction::Left,
@@ -503,6 +514,7 @@ fn parse_array(i: &str) -> IResult<&str, AST> {
             dir,
             num,
             inner: Box::new(geo),
+            vscore: vscore.is_some(),
         },
     ))
 }
@@ -846,15 +858,14 @@ mod tests {
     fn test_array() {
         let out = parse_geo("[5]C<4.5>");
         assert!(
-            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Right})) if
+            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Right, vscore: false})) if
                 matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
             )
         );
 
-        let out = parse_geo("[5; D]C<4.5>");
-        eprintln!("{:?}", out);
+        let out = parse_geo("[5; D; v-score]C<4.5>");
         assert!(
-            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Down})) if
+            matches!(out, Ok(("", AST::Array{ num: 5, inner: b, dir: crate::Direction::Down, vscore: true})) if
                 matches!(*b, AST::Circle{ radius, .. } if radius > 4.4 && radius < 4.6)
             )
         );

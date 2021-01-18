@@ -17,7 +17,7 @@ enum ApertureType {
 
 fn gerber_prelude<'a>(
     cf: CoordinateFormat,
-    ff: FileFunction,
+    ff: Option<FileFunction>,
     apertures: impl Iterator<Item = &'a (i32, ApertureType)>,
 ) -> Vec<Command> {
     let mut commands =
@@ -30,7 +30,11 @@ fn gerber_prelude<'a>(
             ))
             .into(),
             ExtendedCode::FileAttribute(FileAttribute::Part(Part::Single)).into(),
-            ExtendedCode::FileAttribute(FileAttribute::FileFunction(ff)).into(),
+            if let Some(ff) = ff {
+                ExtendedCode::FileAttribute(FileAttribute::FileFunction(ff)).into()
+            } else {
+                FunctionCode::GCode(GCode::Comment("".to_string())).into()
+            },
             ExtendedCode::LoadPolarity(Polarity::Dark).into(),
             FunctionCode::GCode(GCode::InterpolationMode(InterpolationMode::Linear)).into(),
         ];
@@ -63,7 +67,7 @@ pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
     let cf = CoordinateFormat::new(4, 6);
     let mut commands = gerber_prelude(
         cf,
-        FileFunction::Profile(Profile::NonPlated),
+        Some(FileFunction::Profile(Profile::NonPlated)),
         [(10, ApertureType::Circle(0.01))].iter(),
     );
     commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
@@ -151,6 +155,7 @@ impl Eq for FloatBits {}
 pub fn serialize_layer(
     out_layer: super::Layer,
     features: Vec<InnerAtom>,
+    bounds: geo::Rect<f64>,
 ) -> Result<Vec<Command>, ()> {
     let cf = CoordinateFormat::new(4, 6);
 
@@ -171,9 +176,11 @@ pub fn serialize_layer(
                 }
             }
             InnerAtom::Drill { .. } => (), // Drill hits are not on gerbers
-                                           // InnerAtom::Drill { radius, layer, .. } => if out_layer == *layer {
-                                           //     dias.insert(FloatBits(*radius * 2.0), ());
-                                           // }
+            InnerAtom::VScoreH(_) | InnerAtom::VScoreV(_) => {
+                if out_layer == super::Layer::FabricationInstructions {
+                    dias.insert(FloatBits(0.18), ());
+                }
+            }
         }
     }
 
@@ -193,32 +200,33 @@ pub fn serialize_layer(
     let mut commands = gerber_prelude(
         cf,
         match out_layer {
-            super::Layer::FrontCopper => FileFunction::Copper {
+            super::Layer::FrontCopper => Some(FileFunction::Copper {
                 layer: 1,
                 pos: ExtendedPosition::Top,
                 copper_type: None,
-            },
-            super::Layer::BackCopper => FileFunction::Copper {
+            }),
+            super::Layer::BackCopper => Some(FileFunction::Copper {
                 layer: 2,
                 pos: ExtendedPosition::Bottom,
                 copper_type: None,
-            },
-            super::Layer::FrontLegend => FileFunction::Legend {
+            }),
+            super::Layer::FrontMask => Some(FileFunction::Soldermask {
                 pos: Position::Top,
                 index: None,
-            },
-            super::Layer::FrontMask => FileFunction::Soldermask {
+            }),
+            super::Layer::BackMask => Some(FileFunction::Soldermask {
+                pos: Position::Bottom,
+                index: None,
+            }),
+            super::Layer::FrontLegend => Some(FileFunction::Legend {
                 pos: Position::Top,
                 index: None,
-            },
-            super::Layer::BackMask => FileFunction::Soldermask {
+            }),
+            super::Layer::BackLegend => Some(FileFunction::Legend {
                 pos: Position::Bottom,
                 index: None,
-            },
-            super::Layer::BackLegend => FileFunction::Legend {
-                pos: Position::Bottom,
-                index: None,
-            },
+            }),
+            super::Layer::FabricationInstructions => None,
         },
         apertures.iter(),
     );
@@ -268,9 +276,115 @@ pub fn serialize_layer(
                 }
             }
             InnerAtom::Drill { .. } => (), // Drill hits are not on gerbers
+
+            InnerAtom::VScoreH(y) => {
+                if out_layer == super::Layer::FabricationInstructions {
+                    let code = apertures
+                        .iter()
+                        .find(|&(_, f)| matches!(f, ApertureType::Circle(f)  if *f == 0.18))
+                        .unwrap()
+                        .0;
+                    if last_aperture != Some(code) {
+                        commands.push(FunctionCode::DCode(DCode::SelectAperture(code)).into());
+                        last_aperture = Some(code);
+                    }
+
+                    commands.push(
+                        FunctionCode::DCode(DCode::Operation(Operation::Move(Coordinates::new(
+                            CoordinateNumber::try_from(bounds.min().x - 3.).unwrap(),
+                            CoordinateNumber::try_from(*y).unwrap(),
+                            cf,
+                        ))))
+                        .into(),
+                    );
+                    commands.push(
+                        FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                            Coordinates::new(
+                                CoordinateNumber::try_from(bounds.max().x + 3.).unwrap(),
+                                CoordinateNumber::try_from(*y).unwrap(),
+                                cf,
+                            ),
+                            None,
+                        )))
+                        .into(),
+                    );
+
+                    flash_text(
+                        "V-SCORE",
+                        bounds.max().x + 0.5,
+                        *y + 1.,
+                        code,
+                        cf,
+                        &mut commands,
+                    );
+                }
+            }
+
+            InnerAtom::VScoreV(x) => {
+                if out_layer == super::Layer::FabricationInstructions {
+                    let code = apertures
+                        .iter()
+                        .find(|&(_, f)| matches!(f, ApertureType::Circle(f)  if *f == 0.18))
+                        .unwrap()
+                        .0;
+                    if last_aperture != Some(code) {
+                        commands.push(FunctionCode::DCode(DCode::SelectAperture(code)).into());
+                        last_aperture = Some(code);
+                    }
+
+                    commands.push(
+                        FunctionCode::DCode(DCode::Operation(Operation::Move(Coordinates::new(
+                            CoordinateNumber::try_from(*x).unwrap(),
+                            CoordinateNumber::try_from(bounds.min().y - 3.).unwrap(),
+                            cf,
+                        ))))
+                        .into(),
+                    );
+                    commands.push(
+                        FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                            Coordinates::new(
+                                CoordinateNumber::try_from(*x).unwrap(),
+                                CoordinateNumber::try_from(bounds.max().y + 3.).unwrap(),
+                                cf,
+                            ),
+                            None,
+                        )))
+                        .into(),
+                    );
+                }
+            }
         }
     }
 
     commands.push(FunctionCode::MCode(MCode::EndOfFile).into());
     Ok(commands)
+}
+
+fn flash_text(
+    text: &str,
+    lx: f64,
+    ly: f64,
+    d_code: i32,
+    cf: CoordinateFormat,
+    commands: &mut Vec<Command>,
+) {
+    commands.push(FunctionCode::DCode(DCode::SelectAperture(d_code)).into());
+
+    // 6x8 font
+    for y in 0..8 {
+        for x in 0..6 * text.len() {
+            let is_set =
+                super::text::character_pixel(text.as_bytes()[x / 6] as char, (x % 6) as u32, y);
+            if is_set {
+                let x2 = CoordinateNumber::try_from(lx + (x as f64 * 0.11)).unwrap();
+                let y2 = CoordinateNumber::try_from(ly - (y as f64 * 0.11)).unwrap();
+                commands.push(gerber_types::Command::FunctionCode(
+                    FunctionCode::DCode(DCode::Operation(Operation::Flash(Coordinates::new(
+                        x2, y2, cf,
+                    ))))
+                    .into(),
+                ));
+            }
+        }
+    }
 }
