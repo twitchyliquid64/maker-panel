@@ -207,6 +207,34 @@ where
         }
     }
 
+    fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
+        let bounds = compute_bounds(match self.inner.edge_union() {
+            Some(p) => p,
+            None => MultiPolygon(vec![]),
+        });
+
+        let mut out = match self.inner.edge_subtract() {
+            Some(p) => p,
+            None => MultiPolygon(vec![]),
+        };
+
+        for (feature, position) in &self.elements {
+            if let Some(mut geo) = feature.edge_subtract() {
+                use geo::algorithm::translate::Translate;
+                use geo_booleanop::boolean::BooleanOp;
+                let t = position.compute_translation(bounds, compute_bounds(geo.clone()));
+                geo.translate_inplace(t.0, t.1);
+                out = out.union(&geo)
+            }
+        }
+
+        if out.0.len() > 0 {
+            Some(out)
+        } else {
+            None
+        }
+    }
+
     fn translate(&mut self, v: Coordinate<f64>) {
         self.inner.translate(v);
         // No need to move the others, we position them ourselves.

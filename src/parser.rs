@@ -70,6 +70,10 @@ pub enum AST {
         size: (f64, f64),
         inner: Option<InnerAST>,
     },
+    RMount {
+        depth: f64,
+        dir: crate::Direction,
+    },
     Array {
         dir: crate::Direction,
         num: usize,
@@ -92,7 +96,7 @@ impl AST {
         self,
         ctx: &mut ResolverContext,
     ) -> Result<Box<dyn super::Feature + 'a>, Err> {
-        use super::features::{Circle, Rect, Triangle};
+        use super::features::{Circle, RMount, Rect, Triangle};
 
         match self {
             AST::Rect {
@@ -145,6 +149,7 @@ impl AST {
                 )),
                 None => Box::new(Triangle::right_angle(size.0, size.1)),
             }),
+            AST::RMount { depth, dir } => Ok(Box::new(RMount::new(depth).direction(dir))),
             AST::Array {
                 dir,
                 num,
@@ -471,6 +476,38 @@ fn parse_triangle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
+fn parse_rmount(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+    let (i, dir) = alt((
+        tag_no_case("mount_cut_left"),
+        tag_no_case("mount_cut_right"),
+        tag_no_case("mount_cut"),
+    ))(i)?;
+    let (i, deets) = parse_details(i)?;
+
+    let depth = if deets.extra.len() == 1 {
+        deets.extra[0]
+    } else {
+        return Err(nom::Err::Failure(nom::error::make_error(
+            i,
+            nom::error::ErrorKind::Satisfy,
+        )));
+    };
+
+    Ok((
+        i,
+        AST::RMount {
+            depth,
+            dir: match dir.to_lowercase().as_str() {
+                "mount_cut_left" => crate::Direction::Left,
+                "mount_cut_right" => crate::Direction::Right,
+                "mount_cut_down" => crate::Direction::Down,
+                _ => crate::Direction::Up,
+            },
+        },
+    ))
+}
+
 fn parse_array(i: &str) -> IResult<&str, AST> {
     let (i, _) = multispace0(i)?;
 
@@ -691,6 +728,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
         parse_rect,
         parse_circle,
         parse_triangle,
+        parse_rmount,
         parse_wrap,
         parse_column_layout,
         parse_var,
@@ -852,6 +890,14 @@ mod tests {
                 c.1 > 0.99 && c.1 < 1.01 && c.0 > 1.99 && c.0 < 2.01
             )
         );
+    }
+
+    #[test]
+    fn test_r_mount() {
+        let out = parse_geo("mount_cut<12>");
+        assert!(matches!(out, Ok(("", AST::RMount{ depth, dir })) if
+            depth > 11.99 && depth < 12.01 && dir == crate::Direction::Up
+        ));
     }
 
     #[test]

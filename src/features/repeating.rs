@@ -44,6 +44,32 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
         "repeating::Tile"
     }
 
+    fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
+        match self.inner.edge_subtract() {
+            Some(sub_geo) => {
+                let mut out = sub_geo.clone();
+
+                use geo::{bounding_rect::BoundingRect, translate::Translate};
+                let bounds = match self.inner.edge_union() {
+                    Some(edge_geo) => edge_geo.bounding_rect().unwrap(),
+                    None => sub_geo.clone().bounding_rect().unwrap(),
+                };
+
+                for i in 0..self.amt {
+                    let mut next = sub_geo.clone();
+                    let (x, y) = self.direction.offset(bounds);
+                    next.translate_inplace(i as f64 * x, i as f64 * y);
+
+                    use geo_booleanop::boolean::BooleanOp;
+                    out = out.union(&next);
+                }
+                Some(out)
+            }
+
+            None => None,
+        }
+    }
+
     fn edge_union(&self) -> Option<MultiPolygon<f64>> {
         match self.inner.edge_union() {
             Some(edge_geo) => {

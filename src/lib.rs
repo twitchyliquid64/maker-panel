@@ -90,6 +90,7 @@ impl Direction {
 #[derive(Debug)]
 pub enum Err {
     NoFeatures,
+    NoBounds,
     BadEdgeGeometry(String),
     InternalGerberFailure,
     #[cfg(feature = "tessellate")]
@@ -142,7 +143,7 @@ impl<'a> Panel<'a> {
 
     /// Computes the outer geometry of the panel.
     pub fn edge_geometry(&self) -> Option<MultiPolygon<f64>> {
-        let edge = self
+        let mut edge = self
             .features
             .iter()
             .map(|f| f.edge_union())
@@ -156,6 +157,15 @@ impl<'a> Panel<'a> {
                 };
                 acc
             });
+
+        for f in &self.features {
+            if let Some(sub) = f.edge_subtract() {
+                edge = match edge {
+                    Some(e) => Some(e.difference(&sub)),
+                    None => None,
+                };
+            }
+        }
 
         match (&edge, self.convex_hull) {
             (Some(edges), true) => {
@@ -302,7 +312,12 @@ impl<'a> Panel<'a> {
         let bounds = edges.bounding_rect().unwrap();
         let img_bounds = self.expanded_bounds(bounds);
 
-        let size = usvg::Size::new(img_bounds.width(), img_bounds.height()).unwrap();
+        let size = match usvg::Size::new(img_bounds.width(), img_bounds.height()) {
+            Some(sz) => sz,
+            None => {
+                return Err(Err::NoBounds);
+            }
+        };
         let rtree = usvg::Tree::create(usvg::Svg {
             size,
             view_box: usvg::ViewBox {
