@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "maker-panel"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "conv",
  "dyn-clone",

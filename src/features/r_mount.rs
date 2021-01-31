@@ -57,8 +57,8 @@ impl super::Feature for RMount {
         let center = self.rect.center();
 
         let channel = geo::Rect::new(
-            Coordinate::<f64>::from([-1.75f64, -self.depth / 2. - 1.]) + center,
-            Coordinate::<f64>::from([1.75f64, self.depth / 2.]) + center,
+            Coordinate::<f64>::from([-1.65f64, -self.depth / 2. - 1.]) + center,
+            Coordinate::<f64>::from([1.65f64, self.depth / 2.]) + center,
         );
         let nut = geo::Rect::new(
             Coordinate::<f64>::from([-3.12f64, -1.4]) + center,
