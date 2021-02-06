@@ -89,6 +89,9 @@ pub enum AST {
         inner: Box<AST>,
         features: Vec<(crate::features::Positioning, Box<AST>)>,
     },
+    Tuple {
+        inners: Vec<Box<AST>>,
+    },
 }
 
 impl AST {
@@ -196,6 +199,28 @@ impl AST {
                     pos.push(feature.into_feature(ctx)?, position);
                 }
                 Ok(Box::new(pos))
+            }
+            AST::Tuple { inners } => {
+                let mut out: Option<Box<dyn super::Feature>> = None;
+                for inner in inners.into_iter() {
+                    out = match out {
+                        None => Some(inner.into_feature(ctx)?),
+                        Some(left) => Some(Box::new({
+                            let mut out = crate::features::AtPos::new(left);
+                            out.push(
+                                inner.into_feature(ctx)?,
+                                crate::features::Positioning {
+                                    side: Direction::Right,
+                                    align: crate::Align::End,
+                                    centerline_adjustment: 0.,
+                                },
+                            );
+                            out
+                        })),
+                    };
+                }
+
+                Ok(out.unwrap())
             }
             AST::Assign(_, _) => unreachable!(),
             AST::Comment(_) => unreachable!(),
@@ -721,6 +746,23 @@ pub fn parse_comment(i: &str) -> IResult<&str, AST> {
     Ok((i, AST::Comment(v.to_string())))
 }
 
+fn parse_tuple(i: &str) -> IResult<&str, AST> {
+    let (i, _) = multispace0(i)?;
+    let (i, _) = tag("(")(i)?;
+
+    let (i, elements) = fold_many1(
+        tuple((multispace0, parse_geo, multispace0, opt(tag(",")))),
+        Vec::new(),
+        |mut acc, (_, feature, _, _)| {
+            acc.push(Box::new(feature));
+            acc
+        },
+    )(i)?;
+    let (i, _) = tuple((multispace0, tag(")"), multispace0))(i)?;
+
+    Ok((i, AST::Tuple { inners: elements }))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST> {
     alt((
         parse_assign,
@@ -732,6 +774,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
         parse_wrap,
         parse_column_layout,
         parse_var,
+        parse_tuple,
         parse_comment,
     ))(i)
 }
@@ -999,6 +1042,27 @@ mod tests {
             features[0].0.centerline_adjustment < -0.4 && features[0].0.centerline_adjustment > -0.6 &&
             features[1].0.centerline_adjustment > 0.4 && features[1].0.centerline_adjustment < 0.6
         ));
+    }
+
+    #[test]
+    fn test_tuple() {
+        let out = parse_geo("(C<2>(h))");
+        assert!(
+            matches!(out, Ok(("", AST::Tuple{ inners })) if inners.len() == 1 &&
+                matches!(*inners[0], AST::Circle{ coords: None, radius: r, inner: Some(_) }  if
+                    r > 1.99 && r < 2.01
+                )
+            )
+        );
+
+        let out = parse_geo("(C<2>(h), R<4>)");
+        assert!(
+            matches!(out, Ok(("", AST::Tuple{ inners })) if inners.len() == 2 &&
+                matches!(*inners[1], AST::Rect{ coords: None, size: Some((w, h)), inner: _, rounded: None } if
+                    w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
+                )
+            )
+        );
     }
 
     #[test]
