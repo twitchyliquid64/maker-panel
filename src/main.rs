@@ -7,7 +7,7 @@ enum Err {
     IO(std::io::Error),
     General(maker_panel::Err),
     Zip(zip::result::ZipError),
-    SpecError(usize, String),
+    SpecError(usize, String, maker_panel::SpecErr),
 }
 
 /// Represents an output format provided for the gen command.
@@ -293,7 +293,7 @@ impl Opt {
             };
             panel
                 .push_spec(&content)
-                .map_err(|_e| Err::SpecError(i, s.clone()))?;
+                .map_err(|e| Err::SpecError(i, s.clone(), e))?;
         }
         Ok(())
     }
@@ -306,7 +306,12 @@ fn main() {
     match args.panel(&mut panel) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("Error: {:?}", e);
+            if let Err::SpecError(idx, fname, maker_panel::SpecErr::Parse(msg)) = e {
+                eprintln!("Input spec {} ({}) had parsing errors:", idx + 1, fname);
+                eprint!("{}", msg);
+            } else {
+                eprintln!("Error: {:?}", e);
+            }
             std::process::exit(1);
         }
     };

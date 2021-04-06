@@ -5,4 +5,5 @@ let beam = wrap ([12] R<7.5>(h)) with {
   right align interior => $mount,
 };
 
-[10; D; v-score]$beam
+$beam
+# [10; D; v-score]$beam

@@ -2,27 +2,34 @@ use crate::Direction;
 use nom::branch::alt;
 use nom::bytes::complete::{tag, tag_no_case, take_while};
 use nom::character::complete::{multispace0, one_of};
-use nom::combinator::{map, opt};
+use nom::combinator::{all_consuming, cut, map, opt};
+use nom::error::{context, VerboseError};
 use nom::multi::{fold_many1, many0};
 use nom::sequence::{delimited, tuple};
 use nom::IResult;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
+enum Variable {
+    Geo(AST),
+}
+
 #[derive(Debug, Clone, Default)]
 struct ResolverContext {
-    pub definitions: HashMap<String, AST>,
+    pub definitions: HashMap<String, Variable>,
 }
 
 impl ResolverContext {
     fn handle_assignment(&mut self, var: String, geo: Box<AST>) {
-        self.definitions.insert(var, *geo);
+        self.definitions.insert(var, Variable::Geo(*geo));
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum Err {
-    Syntax,
+    Parse(String),
     UndefinedVariable(String),
+    BadType(String),
 }
 
 #[derive(Debug, Clone)]
@@ -225,44 +232,63 @@ impl AST {
             AST::Assign(_, _) => unreachable!(),
             AST::Comment(_) => unreachable!(),
             AST::VarRef(ident) => match ctx.definitions.get(&ident) {
-                Some(ast) => ast.clone().into_feature(ctx),
+                Some(var) => match var {
+                    Variable::Geo(ast) => ast.clone().into_feature(ctx),
+                    _ => Err(Err::BadType(ident)),
+                },
                 None => Err(Err::UndefinedVariable(ident)),
             },
         }
     }
 }
 
-fn parse_ident(i: &str) -> IResult<&str, String> {
+fn parse_ident(i: &str) -> IResult<&str, String, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = take_while(|c| {
-        c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-    })(i)?;
+    let (i, s) = context(
+        "ident",
+        take_while(|c| {
+            c == '_' || (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+        }),
+    )(i)?;
     Ok((i, s.into()))
 }
 
-fn parse_uint(i: &str) -> IResult<&str, usize> {
+fn parse_uint(i: &str) -> IResult<&str, usize, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = take_while(|c| c == '-' || (c >= '0' && c <= '9'))(i)?;
+    let (i, s) = context("uint", take_while(|c| c == '-' || (c >= '0' && c <= '9')))(i)?;
     Ok((
         i,
         s.parse().map_err(|_e| {
-            nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Digit))
+            nom::Err::Error(VerboseError {
+                errors: vec![(
+                    i,
+                    nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::Digit),
+                )],
+            })
         })?,
     ))
 }
 
-fn parse_float(i: &str) -> IResult<&str, f64> {
+fn parse_float(i: &str) -> IResult<&str, f64, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = take_while(|c| c == '.' || c == '+' || c == '-' || (c >= '0' && c <= '9'))(i)?;
+    let (i, s) = context(
+        "float",
+        take_while(|c| c == '.' || c == '+' || c == '-' || (c >= '0' && c <= '9')),
+    )(i)?;
     Ok((
         i,
         s.parse().map_err(|_e| {
-            nom::Err::Error(nom::error::Error::new(i, nom::error::ErrorKind::Digit))
+            nom::Err::Error(VerboseError {
+                errors: vec![(
+                    i,
+                    nom::error::VerboseErrorKind::Nom(nom::error::ErrorKind::Digit),
+                )],
+            })
         })?,
     ))
 }
 
-fn parse_coords(i: &str) -> IResult<&str, (f64, f64)> {
+fn parse_coords(i: &str) -> IResult<&str, (f64, f64), VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag("(")(i)?;
     let (i, x) = parse_float(i)?;
@@ -274,7 +300,7 @@ fn parse_coords(i: &str) -> IResult<&str, (f64, f64)> {
     Ok((i, (x, y)))
 }
 
-fn parse_inner(i: &str) -> IResult<&str, InnerAST> {
+fn parse_inner(i: &str) -> IResult<&str, InnerAST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
     let (i, inner) = delimited(
@@ -293,9 +319,9 @@ fn parse_inner(i: &str) -> IResult<&str, InnerAST> {
     Ok((i, inner))
 }
 
-fn parse_inner_msp(i: &str) -> IResult<&str, InnerAST> {
+fn parse_inner_msp(i: &str) -> IResult<&str, InnerAST, VerboseError<&str>> {
     let (i, _) = tag_no_case("msp")(i)?;
-    match parse_details(i) {
+    match context("msp details", parse_details)(i) {
         Ok((i2, deets)) => {
             let size = if let Some((x, y)) = deets.size {
                 Some((x, y))
@@ -332,46 +358,46 @@ struct Details {
 }
 
 impl Details {
-    fn parse_pos(i: &str) -> IResult<&str, DetailFragment> {
+    fn parse_pos(i: &str) -> IResult<&str, DetailFragment, VerboseError<&str>> {
         let (i, _) = multispace0(i)?;
         let (i, _t) = tag("@")(i)?;
-        let (i, c) = parse_coords(i)?;
+        let (i, c) = cut(parse_coords)(i)?;
         Ok((i, DetailFragment::Coord(c.0, c.1)))
     }
-    fn parse_extra(i: &str) -> IResult<&str, DetailFragment> {
+    fn parse_extra(i: &str) -> IResult<&str, DetailFragment, VerboseError<&str>> {
         let (i, f) = parse_float(i)?;
         Ok((i, DetailFragment::Extra(f)))
     }
-    fn parse_size(i: &str) -> IResult<&str, DetailFragment> {
+    fn parse_size(i: &str) -> IResult<&str, DetailFragment, VerboseError<&str>> {
         let (i, _) = multispace0(i)?;
         let (i, (_, _, _, _, c)) = tuple((
             alt((tag_no_case("size"), tag_no_case("s"))),
             multispace0,
             tag("="),
             multispace0,
-            parse_coords,
+            cut(parse_coords),
         ))(i)?;
         Ok((i, DetailFragment::Size(c.0, c.1)))
     }
-    fn parse_radius(i: &str) -> IResult<&str, DetailFragment> {
+    fn parse_radius(i: &str) -> IResult<&str, DetailFragment, VerboseError<&str>> {
         let (i, _) = multispace0(i)?;
         let (i, (_, _, _, _, r)) = tuple((
             alt((tag_no_case("radius"), tag_no_case("r"))),
             multispace0,
             tag("="),
             multispace0,
-            parse_float,
+            cut(parse_float),
         ))(i)?;
         Ok((i, DetailFragment::Radius(r)))
     }
-    fn parse_rounding(i: &str) -> IResult<&str, DetailFragment> {
+    fn parse_rounding(i: &str) -> IResult<&str, DetailFragment, VerboseError<&str>> {
         let (i, _) = multispace0(i)?;
         let (i, (_, _, _, _, r)) = tuple((
             alt((tag_no_case("round"), tag_no_case("r"))),
             multispace0,
             tag("="),
             multispace0,
-            parse_float,
+            cut(parse_float),
         ))(i)?;
         Ok((i, DetailFragment::Rounding(r)))
     }
@@ -382,17 +408,33 @@ impl Details {
     }
 }
 
-fn parse_details(i: &str) -> IResult<&str, Details> {
+fn parse_details(i: &str) -> IResult<&str, Details, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
     let (i, deets) = delimited(
         tuple((tag("<"), multispace0)),
-        fold_many1(
+        cut(fold_many1(
             alt((
-                tuple((Details::parse_pos, multispace0, opt(tag(",")))),
-                tuple((Details::parse_size, multispace0, opt(tag(",")))),
-                tuple((Details::parse_radius, multispace0, opt(tag(",")))),
-                tuple((Details::parse_rounding, multispace0, opt(tag(",")))),
+                tuple((
+                    context("pos", Details::parse_pos),
+                    multispace0,
+                    opt(tag(",")),
+                )),
+                tuple((
+                    context("size", Details::parse_size),
+                    multispace0,
+                    opt(tag(",")),
+                )),
+                tuple((
+                    context("radius", Details::parse_radius),
+                    multispace0,
+                    opt(tag(",")),
+                )),
+                tuple((
+                    context("rounding", Details::parse_rounding),
+                    multispace0,
+                    opt(tag(",")),
+                )),
                 tuple((Details::parse_extra, multispace0, opt(tag(",")))),
             )),
             Details::default(),
@@ -414,7 +456,7 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
                 }
                 acc
             },
-        ),
+        )),
         tuple((tag(">"), multispace0)),
     )(i)?;
 
@@ -422,10 +464,10 @@ fn parse_details(i: &str) -> IResult<&str, Details> {
     Ok((i, deets.with_inner(inner)))
 }
 
-fn parse_rect(i: &str) -> IResult<&str, AST> {
+fn parse_rect(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag_no_case("R")(i)?;
-    let (i, deets) = parse_details(i)?;
+    let (i, deets) = context("rectangle details", parse_details)(i)?;
 
     let size = if let Some((x, y)) = deets.size {
         Some((x, y))
@@ -448,10 +490,10 @@ fn parse_rect(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_circle(i: &str) -> IResult<&str, AST> {
+fn parse_circle(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag_no_case("C")(i)?;
-    let (i2, deets) = parse_details(i)?;
+    let (i2, deets) = context("circle details", parse_details)(i)?;
 
     let r = if let Some(r) = deets.radius {
         r
@@ -474,10 +516,10 @@ fn parse_circle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_triangle(i: &str) -> IResult<&str, AST> {
+fn parse_triangle(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag_no_case("T")(i)?;
-    let (i2, deets) = parse_details(i)?;
+    let (i2, deets) = context("triangle details", cut(parse_details))(i)?;
 
     let size = if let Some((x, y)) = deets.size {
         (x, y)
@@ -501,14 +543,14 @@ fn parse_triangle(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_rmount(i: &str) -> IResult<&str, AST> {
+fn parse_rmount(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, dir) = alt((
         tag_no_case("mount_cut_left"),
         tag_no_case("mount_cut_right"),
         tag_no_case("mount_cut"),
     ))(i)?;
-    let (i, deets) = parse_details(i)?;
+    let (i, deets) = context("mount details", cut(parse_details))(i)?;
 
     let depth = if deets.extra.len() == 1 {
         deets.extra[0]
@@ -533,22 +575,25 @@ fn parse_rmount(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_array(i: &str) -> IResult<&str, AST> {
+fn parse_array(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
-    let (i, params) = delimited(
-        tuple((tag("["), multispace0)),
-        tuple((
-            parse_uint,
-            opt(tuple((multispace0, tag(";"), multispace0, one_of("UDRL")))),
-            opt(tuple((
-                multispace0,
-                tag(";"),
-                multispace0,
-                alt((tag_no_case("vscore"), tag_no_case("v-score"))),
+    let (i, params) = context(
+        "array",
+        delimited(
+            tuple((tag("["), multispace0)),
+            cut(tuple((
+                parse_uint,
+                opt(tuple((multispace0, tag(";"), multispace0, one_of("UDRL")))),
+                opt(tuple((
+                    multispace0,
+                    tag(";"),
+                    multispace0,
+                    alt((tag_no_case("vscore"), tag_no_case("v-score"))),
+                ))),
             ))),
-        )),
-        tuple((tag("]"), multispace0)),
+            tuple((tag("]"), multispace0)),
+        ),
     )(i)?;
     let (i, geo) = parse_geo(i)?;
 
@@ -581,31 +626,34 @@ fn parse_array(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_column_layout(i: &str) -> IResult<&str, AST> {
+fn parse_column_layout(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
-    let (i, (dir, _, pos, _, _, inners)) = delimited(
-        tuple((tag_no_case("column"), multispace0)),
-        tuple((
-            alt((
-                tag_no_case("left"),
-                tag_no_case("center"),
-                tag_no_case("right"),
+    let (i, (dir, _, pos, _, _, inners)) = context(
+        "column",
+        delimited(
+            tuple((tag_no_case("column"), multispace0)),
+            tuple((
+                alt((
+                    tag_no_case("left"),
+                    tag_no_case("center"),
+                    tag_no_case("right"),
+                )),
+                multispace0,
+                opt(tuple((tag("@"), parse_coords))),
+                multispace0,
+                tag("{"),
+                fold_many1(
+                    tuple((parse_geo, multispace0, opt(tag(",")))),
+                    Vec::new(),
+                    |mut acc, (inner, _, _)| {
+                        acc.push(Box::new(inner));
+                        acc
+                    },
+                ),
             )),
-            multispace0,
-            opt(tuple((tag("@"), parse_coords))),
-            multispace0,
-            tag("{"),
-            fold_many1(
-                tuple((parse_geo, multispace0, opt(tag(",")))),
-                Vec::new(),
-                |mut acc, (inner, _, _)| {
-                    acc.push(Box::new(inner));
-                    acc
-                },
-            ),
-        )),
-        tuple((tag("}"), multispace0)),
+            tuple((tag("}"), multispace0)),
+        ),
     )(i)?;
 
     Ok((
@@ -622,7 +670,7 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
+fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, VerboseError<&str>> {
     let (i, (_, side, _, offset, _, align, _)) = tuple((
         multispace0,
         alt((
@@ -676,29 +724,35 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning> {
     ))
 }
 
-fn parse_wrap(i: &str) -> IResult<&str, AST> {
+fn parse_wrap(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
-    let (i, (_, _, _, inner, _, _, _, _, _, _)) = tuple((
-        tag_no_case("wrap"),
-        multispace0,
-        tag("("),
-        parse_geo,
-        multispace0,
-        tag(")"),
-        multispace0,
-        tag_no_case("with"),
-        multispace0,
-        tag("{"),
-    ))(i)?;
-    let (i, elements) = fold_many1(
+    let (i, (_, _, _, inner, _, _, _, _, _, _)) = context(
+        "wrap",
         tuple((
-            parse_pos_spec,
+            tag_no_case("wrap"),
             multispace0,
+            tag("("),
             parse_geo,
             multispace0,
-            opt(tag(",")),
+            tag(")"),
+            multispace0,
+            tag_no_case("with"),
+            multispace0,
+            tag("{"),
         )),
+    )(i)?;
+    let (i, elements) = fold_many1(
+        context(
+            "pos spec",
+            tuple((
+                parse_pos_spec,
+                multispace0,
+                parse_geo,
+                multispace0,
+                opt(tag(",")),
+            )),
+        ),
         Vec::new(),
         |mut acc, (pos, _, feature, _, _)| {
             acc.push((pos, Box::new(feature)));
@@ -716,7 +770,7 @@ fn parse_wrap(i: &str) -> IResult<&str, AST> {
     ))
 }
 
-fn parse_assign(i: &str) -> IResult<&str, AST> {
+fn parse_assign(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
     let (i, (_, _, var, _, _, geo, _, _)) = tuple((
@@ -733,20 +787,20 @@ fn parse_assign(i: &str) -> IResult<&str, AST> {
     Ok((i, AST::Assign(var, Box::new(geo))))
 }
 
-fn parse_var(i: &str) -> IResult<&str, AST> {
+fn parse_var(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, (_, var)) = tuple((tag("$"), parse_ident))(i)?;
     Ok((i, AST::VarRef(var)))
 }
 
-pub fn parse_comment(i: &str) -> IResult<&str, AST> {
+pub fn parse_comment(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag("#")(i)?;
     let (i, v) = take_while(|chr| chr != '\n')(i)?;
     Ok((i, AST::Comment(v.to_string())))
 }
 
-fn parse_tuple(i: &str) -> IResult<&str, AST> {
+fn parse_tuple(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
     let (i, _) = tag("(")(i)?;
 
@@ -763,7 +817,7 @@ fn parse_tuple(i: &str) -> IResult<&str, AST> {
     Ok((i, AST::Tuple { inners: elements }))
 }
 
-fn parse_geo(i: &str) -> IResult<&str, AST> {
+fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     alt((
         parse_assign,
         parse_array,
@@ -783,10 +837,17 @@ fn parse_geo(i: &str) -> IResult<&str, AST> {
 /// it represents.
 pub fn build<'a>(i: &str) -> Result<Vec<Box<dyn super::Feature + 'a>>, Err> {
     let mut ctx = ResolverContext::default();
-    many0(parse_geo)(i)
-        .map_err(|_e| Err::Syntax)?
-        .1
-        .into_iter()
+    let (_, (g, _)) = all_consuming(tuple((many0(parse_geo), multispace0)))(i).map_err(|e| {
+        Err::Parse(nom::error::convert_error(
+            i,
+            match e {
+                nom::Err::Error(e) | nom::Err::Failure(e) => e,
+                _ => unreachable!(),
+            },
+        ))
+    })?;
+
+    g.into_iter()
         .map(|g| match g {
             AST::Assign(var, geo) => {
                 ctx.handle_assignment(var, geo);
@@ -1005,6 +1066,21 @@ mod tests {
             if i.len() == 1
         ));
 
+        let out = parse_geo("column center { (R<1>) }");
+        // eprintln!("{:?}", out);
+        assert!(matches!(
+            out,
+            Ok((
+                "",
+                AST::ColumnLayout {
+                    align: crate::Align::Center,
+                    inners: i,
+                    coords: None,
+                },
+            ))
+            if i.len() == 1 && matches!(*i[0], AST::Tuple{ .. })
+        ));
+
         let out = parse_geo("column center @(1, 2) { R<1> }");
         eprintln!("{:?}", out);
         assert!(matches!(
@@ -1026,7 +1102,7 @@ mod tests {
         let out = parse_geo(
             "wrap ($inner) with { left-0.5 => C<2>(h), right align exterior => C<2>(h4) }",
         );
-        eprintln!("{:?}", out);
+        // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
             matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
             features[1].0.align == crate::Align::End
@@ -1042,11 +1118,21 @@ mod tests {
             features[0].0.centerline_adjustment < -0.4 && features[0].0.centerline_adjustment > -0.6 &&
             features[1].0.centerline_adjustment > 0.4 && features[1].0.centerline_adjustment < 0.6
         ));
+
+        let out = parse_geo(
+            "wrap ($inner) with {\n  left => (C<2>(h), C<2>),\n  right => (C<2>(h), C<2>),\n}",
+        );
+        eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
+            features[0].0.align == crate::Align::Center
+        ));
     }
 
     #[test]
     fn test_tuple() {
         let out = parse_geo("(C<2>(h))");
+        eprintln!("{:?}", out);
         assert!(
             matches!(out, Ok(("", AST::Tuple{ inners })) if inners.len() == 1 &&
                 matches!(*inners[0], AST::Circle{ coords: None, radius: r, inner: Some(_) }  if
@@ -1060,6 +1146,18 @@ mod tests {
             matches!(out, Ok(("", AST::Tuple{ inners })) if inners.len() == 2 &&
                 matches!(*inners[1], AST::Rect{ coords: None, size: Some((w, h)), inner: _, rounded: None } if
                     w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
+                )
+            )
+        );
+
+        let out = parse_geo("(C<2>(h), (C<2>(h), R<4>))");
+        // eprintln!("{:?}", out);
+        assert!(
+            matches!(out, Ok(("", AST::Tuple{ inners })) if inners.len() == 2 &&
+                matches!(&*inners[1], AST::Tuple{ inners } if inners.len() == 2 &&
+                    matches!(*inners[1], AST::Rect{ coords: None, size: Some((w, h)), inner: _, rounded: None } if
+                        w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
+                    )
                 )
             )
         );
@@ -1085,5 +1183,24 @@ mod tests {
         );
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(features) if features.len() == 1));
+    }
+
+    #[test]
+    fn test_err_msgs() {
+        let out = build("C<a>");
+        assert!(matches!(out, Err(Err::Parse(_))));
+        let out = build("T<a>");
+        assert!(matches!(out, Err(Err::Parse(_))));
+
+        let out = build("R<@(a)>");
+        // eprintln!("\n\n{}\n\n", match out.err().unwrap() {
+        //     Err::Parse(e) => e,
+        //     _ => unreachable!(),
+        // });
+        // unreachable!();
+        assert!(matches!(out, Err(Err::Parse(_))));
+
+        let out = build("(aBC)");
+        assert!(matches!(out, Err(Err::Parse(_))));
     }
 }
