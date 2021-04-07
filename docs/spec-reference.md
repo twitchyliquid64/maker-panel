@@ -67,28 +67,39 @@ shapes, such as rectangles, circles, and triangles.
 
 #### Rectangles
 
-Form                                                      | Example                              | Meaning
---------------------------------------------------------- | ------------------------------------ | ------------
-`R<dimension>()`                                          | `R<5>()`                             | Creates a rectangle with a width and height of 5 units.
-`R<width, height>()` <br> `R<size = (width, height)>()`   | `R<3, 5>()` <br> `R<size = (3,5)>()` | Creates a rectangle with a width of 3 units and a height of 5 units.
-
-TODO positioning
+Form                                                                        | Example                                                | Meaning
+--------------------------------------------------------------------------- | ------------------------------------------------------ | ------------
+`R<dimension>()`                                                            | `R<5>()`                                               | Creates a rectangle with a width and height of 5 units.
+`R<@(x, y), dimension>()`                                                   | `R<@(1, 2), 5>()`                                      | Creates a rectangle with a width and height of 5 units, centered on (1, 2).
+`R<width, height>()` <br> `R<size = (width, height)>()`                     | `R<3, 5>()` <br> `R<size = (3,5)>()`                   | Creates a rectangle with a width of 3 units and a height of 5 units.
+`R<@(x, y), width, height>()` <br> `R<@(x, y), size = (width, height)>()`   | `R<@(1, 2), 3, 5>()` <br> `R<@(1, 2), size = (3,5)>()` | Creates a rectangle with a width of 3 units and a height of 5 units, centered on (1, 2).
 
 #### Circles
 
-Form                                                              | Example                              | Meaning
------------------------------------------------------------------ | ------------------------------------ | -----------
-`C<radius>()` <br> `C<radius = radius>()` <br> `C<r = radius>()`  | `C<5>()` <br> `C<radius = 5>()` <br> `C<r = 5>()` | Creates a circle with a radius of 5 units.
+Form                                                                                         | Example                                                                      | Meaning
+-------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -----------
+`C<radius>()` <br> `C<radius = radius>()` <br> `C<r = radius>()`                             | `C<5>()` <br> `C<radius = 5>()` <br> `C<r = 5>()`                            | Creates a circle with a radius of 5 units.
+`C<@(x, y), radius>()` <br> `C<@(x, y), radius = radius>()` <br> `C<@(x, y), r = radius>()`  | `C<@(2, 3), 5>()` <br> `C<@(2, 3), radius = 5>()` <br> `C<@(2, 3), r = 5>()` | Creates a circle with a radius of 5 units. The center of the circle is positioned at (2, 3).
 
-TODO positioning
 
 #### Triangles
 
-TODO
+Form                                                      | Example                              | Meaning
+--------------------------------------------------------- | ------------------------------------ | ------------
+`T<dimension>()`                                          | `T<5>()`                             | Creates a triangle with a width and height of 5 units.
+`T<width, height>()` <br> `T<size = (width, height)>()`   | `T<3, 5>()` <br> `R<size = (3,5)>()` | Creates a triangle with a width of 3 units and a height of 5 units.
+
 
 #### Right-angle mount
 
-TODO
+Creates a cut-out suitable for bolting another panel to the side at right angles, using M3 fasteners.
+
+Form                                | Example                              | Meaning
+----------------------------------- | ------------------------------------ | ------------
+`mount_cut<length>`                 | `mount_cut<8>()`                     | Creates an upwards-facing mount cutout, with a depth of 8mm.
+`mount_cut_left<length>`            | `mount_cut_left<8>()`                | Creates a left-facing mount cutout, with a depth of 8mm.
+`mount_cut_right<length>`           | `mount_cut_right<8>()`               | Creates a right-facing mount cutout, with a depth of 8mm.
+
 
 ### Surface
 
