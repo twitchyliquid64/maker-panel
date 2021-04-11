@@ -46,9 +46,40 @@ comments within a `wrap()` feature don't work.
 
 ### Variables
 
-Features can be saved to a variable and later created multiple times.
+**Feature variables**
 
-TODO
+Features can be saved to a variable and later created multiple times. You define
+a variable using the `let` statement:
+
+```
+let top = R<7>(h);
+```
+
+_Defines a variable named 'top', which is a 7x7 square containing a h feature._
+
+You can use a variable wherever you would use a feature, by writing its name prefixed by
+a `$` character. For example:
+
+```
+[2]$top
+```
+
+_Manifests the 'top' twice (as part of an array)._
+
+**Number variables**
+
+You can also save the value of a CEL expression to a variable and use it later.
+
+```
+let diameter = !{26}
+let radius = !{diameter / 2}
+
+C<$radius>
+```
+
+_In the above example, we save 26 to 'diameter', which we then use in another
+CEL expression to compute 'radius'. We then use radius as the input to a circle
+feature._
 
 
 ## Features
@@ -58,6 +89,10 @@ are specified alongside one another, they are combined: features that detail
 the geometry of the panel are unioned (ie: two overlapping squares produce a
 larger rectangle with dimensions no greater than the extremes of either rectangle),
 and surface features are applied to the panel in the order in which they appear.
+
+In general, it is an error if your shapes don't overlap to form a single,
+combined shape. You can change this behavior with the `-c` flag, which will compute
+the convex hull of all the shapes (hence forming a single shape).
 
 ### Geometry
 
@@ -164,8 +199,60 @@ Form                           | Example                 | Meaning
 
 #### Wraps (edge positioning)
 
-TODO
+A wrap positions any number of features about the cardinal directions of a center
+feature. The basic form looks like this:
+
+```
+wrap (SOME_CENTER_FEATURE) with {
+  positioning => feature1,
+  positioning => feature2,
+}
+```
+
+Each section within the `{ }` braces describes how one feature which ('wraps'
+the center one) should be laid out. You write these sections like this:
+
+Form                                                 | Example                        | Meaning
+---------------------------------------------------- | ------------------------------ | ------------
+`top/bottom/left/right => feature,`                  | `top => R<5>,`                 | Positions a 5x5 rectangle to the center-top of its wrapping feature, overlapping halfway.
+`top/bottom/left/right+offset => feature,`           | `top-0.5 => R<5>,`             | Positions a 5x5 rectangle to the top-left of its wrapping feature, overlapping halfway.
+`top/bottom/left/right align interior => feature,`   | `top align interior => R<5>,`  | Aligns a 5x5 rectangle to the center-top of its wrapping feature, completely contained within the feature it wraps.
+`top/bottom/left/right align exterior => feature,`   | `top align exterior => R<5>,`  | Positions a 5x5 rectangle to the center-top of its wrapping feature, touching edges with the feature it wraps but otherwise outside of its geometry.
+
+Putting it all together looks like this:
+
+```
+wrap (R<30, 10>) with {
+  left  => C<5>,
+  right => C<5>,
+}
+```
+
+_Positions two circles at either end of a rectangle._
 
 ## Other language constructs
 
-TODO
+### CEL expressions
+
+You can read the specification for the CEL language [here](https://github.com/google/cel-spec).
+
+You can perform simple math in maker-panel using CEL expressions. You can use
+CEL expressions anywhere in `<>` where you would specify a number, by instead
+writing:
+
+```
+!{my-CEL-expression}
+```
+
+For example:
+
+```
+C<!{2 + 4}>
+```
+
+You can reference any numeric variable from within your expressions. For example:
+
+```
+let some_number = !{4};
+C<!{2 + some_number}>
+```

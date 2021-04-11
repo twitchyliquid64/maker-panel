@@ -4,7 +4,9 @@
 [![Docs](https://docs.rs/maker-panel/badge.svg)](https://docs.rs/maker-panel/)
 ![License](https://img.shields.io/crates/l/maker-panel)
 
-Eventually you'll be able to specify very basic geometry (ie: screw holes repeating every x mm, striding every y mm), and have usable PCBs generated.
+Make simple parts by combining shapes together. Order them as cheap PCBs.
+
+[Language reference](docs/spec-reference.md)
 
 ## Examples
 
