@@ -13,6 +13,7 @@ use std::collections::HashMap;
 pub enum Value {
     Float(f64),
     Ref(String),
+    Cel(String),
 }
 
 impl Value {
@@ -29,10 +30,19 @@ impl Value {
             Value::Ref(ident) => match r.definitions.get(ident) {
                 Some(var) => match var {
                     Variable::Number(n) => Ok(*n),
-                    _ => panic!(Err::BadType(ident.to_string())),
+                    _ => Err(Err::BadType(ident.to_string())),
                 },
                 None => Err(Err::UndefinedVariable(ident.to_string())),
             },
+            Value::Cel(exp) => {
+                use cel_interpreter::*;
+                match r.eval_cel(exp.to_string()) {
+                    objects::CelType::UInt(n) => Ok(n as f64),
+                    objects::CelType::Int(n) => Ok(n as f64),
+                    objects::CelType::Float(n) => Ok(n),
+                    _ => Err(Err::BadType(exp.to_string())),
+                }
+            }
         }
     }
 }
@@ -72,7 +82,7 @@ impl ResolverContext {
         }
     }
 
-    fn cel_ctx(&mut self) -> cel_interpreter::context::Context {
+    fn cel_ctx(&self) -> cel_interpreter::context::Context {
         use cel_interpreter::*;
         let mut ctx = context::Context::default();
         for (ident, val) in &self.definitions {
@@ -87,7 +97,7 @@ impl ResolverContext {
         ctx
     }
 
-    fn eval_cel(&mut self, exp: String) -> cel_interpreter::objects::CelType {
+    fn eval_cel(&self, exp: String) -> cel_interpreter::objects::CelType {
         use cel_interpreter::*;
         match Program::compile(&exp) {
             Ok(p) => {
@@ -383,16 +393,27 @@ fn parse_uint(i: &str) -> IResult<&str, usize, VerboseError<&str>> {
 
 fn parse_float(i: &str) -> IResult<&str, Value, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
-    let (i, s) = context(
-        "float",
-        take_while(|c| c == '.' || c == '+' || c == '-' || (c >= '0' && c <= '9')),
-    )(i)?;
 
     // Handle referencing variables
     if let Ok((i, _)) = tag::<_, _, VerboseError<&str>>("$")(i) {
         let (i, ident) = parse_ident(i)?;
         return Ok((i, Value::Ref(ident)));
     }
+
+    // Handle CEL expressions
+    if let Ok((i, ast)) = parse_cel(i) {
+        match ast {
+            AST::Cel(exp) => {
+                return Ok((i, Value::Cel(exp)));
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let (i, s) = context(
+        "float",
+        take_while(|c| c == '.' || c == '+' || c == '-' || (c >= '0' && c <= '9')),
+    )(i)?;
 
     Ok((
         i,
@@ -1335,6 +1356,8 @@ mod tests {
 
         let out = build("let bleh = !{1 + 1}");
         assert!(matches!(out, Ok(_)));
+        let out = build("let bleh = !{1 + 1}\nlet ye = !{bleh + 2}");
+        assert!(matches!(out, Ok(_)));
 
         let out = build("let v2 = !{1 + 1}\nR<$v2>");
         assert!(matches!(out, Ok(v) if v.len() == 1));
@@ -1342,5 +1365,8 @@ mod tests {
         let out = build("R<$missing>");
         // eprintln!("{:?}", out);
         assert!(matches!(out, Err(Err::UndefinedVariable(_))));
+
+        let out = build("let bleh = !{22};\nR<!{bleh + 1}>");
+        assert!(matches!(out, Ok(v) if v.len() == 1));
     }
 }
