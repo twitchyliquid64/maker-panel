@@ -142,6 +142,36 @@ impl InnerAST {
 }
 
 #[derive(Debug, Clone)]
+pub enum WrapPosition {
+    Cardinal {
+        side: Direction,
+        offset: Value,
+        align: crate::Align,
+    },
+    Angle {
+        angle: Value,
+        offset: Value,
+    },
+}
+
+impl WrapPosition {
+    fn into_positioning(self, r: &ResolverContext) -> Result<crate::features::Positioning, Err> {
+        match self {
+            WrapPosition::Cardinal {
+                side,
+                offset,
+                align,
+            } => Ok(crate::features::Positioning {
+                side,
+                align,
+                centerline_adjustment: offset.rfloat(r)?,
+            }),
+            WrapPosition::Angle { .. } => unimplemented!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum AST {
     Assign(String, Box<AST>),
     VarRef(String),
@@ -179,7 +209,7 @@ pub enum AST {
     },
     Wrap {
         inner: Box<AST>,
-        features: Vec<(crate::features::Positioning, Box<AST>)>,
+        features: Vec<(WrapPosition, Box<AST>)>,
     },
     Tuple {
         inners: Vec<Box<AST>>,
@@ -305,7 +335,7 @@ impl AST {
             AST::Wrap { inner, features } => {
                 let mut pos = crate::features::AtPos::new(inner.into_feature(ctx)?);
                 for (position, feature) in features {
-                    pos.push(feature.into_feature(ctx)?, position);
+                    pos.push(feature.into_feature(ctx)?, position.into_positioning(ctx)?);
                 }
                 Ok(Box::new(pos))
             }
@@ -810,8 +840,8 @@ fn parse_column_layout(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     ))
 }
 
-fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, VerboseError<&str>> {
-    let (i, (_, side, _, offset, _, align, _)) = tuple((
+fn parse_pos_spec(i: &str) -> IResult<&str, WrapPosition, VerboseError<&str>> {
+    let (i, (_, side, offset, _, align, _)) = tuple((
         multispace0,
         alt((
             tag_no_case("left"),
@@ -821,7 +851,6 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, Verbos
             tag_no_case("top"),
             tag_no_case("bottom"),
         )),
-        multispace0,
         opt(parse_float),
         multispace0,
         opt(tuple((
@@ -840,7 +869,7 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, Verbos
 
     Ok((
         i,
-        crate::features::Positioning {
+        WrapPosition::Cardinal {
             side: match side.to_lowercase().as_str() {
                 "left" => Direction::Left,
                 "right" => Direction::Right,
@@ -848,10 +877,7 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, Verbos
                 "bottom" | "down" => Direction::Down,
                 _ => unreachable!(),
             },
-            centerline_adjustment: match offset {
-                Some(offset) => offset.float(),
-                None => 0.0,
-            },
+            offset: offset.unwrap_or(Value::Float(0.0)),
             align: match align {
                 Some((_, _, _, align, _)) => match align.to_lowercase().as_str() {
                     "exterior" => crate::Align::End,
@@ -860,6 +886,25 @@ fn parse_pos_spec(i: &str) -> IResult<&str, crate::features::Positioning, Verbos
                 },
                 _ => crate::Align::Center,
             },
+        },
+    ))
+}
+
+fn parse_about_spec(i: &str) -> IResult<&str, WrapPosition, VerboseError<&str>> {
+    let (i, (_, angle, _, offset, _, _)) = tuple((
+        tuple((multispace0, tag_no_case("angle("))),
+        parse_float,
+        tuple((multispace0, tag(")"))),
+        opt(parse_float),
+        multispace0,
+        tag("=>"),
+    ))(i)?;
+
+    Ok((
+        i,
+        WrapPosition::Angle {
+            angle,
+            offset: offset.unwrap_or(Value::Float(0.0)),
         },
     ))
 }
@@ -886,7 +931,7 @@ fn parse_wrap(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
         context(
             "pos spec",
             tuple((
-                parse_pos_spec,
+                alt((parse_pos_spec, parse_about_spec)),
                 multispace0,
                 parse_geo,
                 multispace0,
@@ -1246,7 +1291,7 @@ mod tests {
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
             matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
-            features[1].0.align == crate::Align::End
+            matches!(features[1].0, WrapPosition::Cardinal{ align: crate::Align::End, .. })
         ));
 
         let out = parse_geo(
@@ -1255,18 +1300,30 @@ mod tests {
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
             matches!(*inner, AST::ColumnLayout{ .. }) && features.len() == 2 &&
-            features[0].0.side == crate::Direction::Left && features[1].0.side == crate::Direction::Right &&
-            features[0].0.centerline_adjustment < -0.4 && features[0].0.centerline_adjustment > -0.6 &&
-            features[1].0.centerline_adjustment > 0.4 && features[1].0.centerline_adjustment < 0.6
+            matches!(features[0].0, WrapPosition::Cardinal{ side: Direction::Left, offset: Value::Float(o1), .. } if
+            o1 < -0.4 && o1 > -0.6) &&
+            matches!(features[1].0, WrapPosition::Cardinal{ side: Direction::Right, offset: Value::Float(o2), .. } if
+           o2 > 0.4 && o2 < 0.6)
         ));
 
         let out = parse_geo(
             "wrap ($inner) with {\n  left => (C<2>(h), C<2>),\n  right => (C<2>(h), C<2>),\n}",
         );
-        eprintln!("{:?}", out);
+        // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
             matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
-            features[0].0.align == crate::Align::Center
+            matches!(features[0].0, WrapPosition::Cardinal{ align: crate::Align::Center, .. })
+        ));
+
+        let out =
+            parse_geo("wrap ($inner) with {\n  angle(90) => C<2>,\n  angle(-90) 25 => C<2>,\n}");
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 2 &&
+            matches!(features[0].0, WrapPosition::Angle{ angle: Value::Float(a1), .. } if
+            a1 < 91. && a1 > 89.) &&
+            matches!(features[1].0, WrapPosition::Angle{ offset: Value::Float(o2), .. } if
+           o2 > 24. && o2 < 26.)
         ));
     }
 
@@ -1367,6 +1424,10 @@ mod tests {
         assert!(matches!(out, Err(Err::UndefinedVariable(_))));
 
         let out = build("let bleh = !{22};\nR<!{bleh + 1}>");
+        assert!(matches!(out, Ok(v) if v.len() == 1));
+
+        let out = build("let bleh = !{5};\nwrap (R<5>) with { left $bleh => R<2>, }");
+        // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(v) if v.len() == 1));
     }
 }
