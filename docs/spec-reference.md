@@ -218,6 +218,7 @@ Form                                                 | Example                  
 `top/bottom/left/right+offset => feature,`           | `top-0.5 => R<5>,`             | Positions a 5x5 rectangle to the top-left of its wrapping feature, overlapping halfway.
 `top/bottom/left/right align interior => feature,`   | `top align interior => R<5>,`  | Aligns a 5x5 rectangle to the center-top of its wrapping feature, completely contained within the feature it wraps.
 `top/bottom/left/right align exterior => feature,`   | `top align exterior => R<5>,`  | Positions a 5x5 rectangle to the center-top of its wrapping feature, touching edges with the feature it wraps but otherwise outside of its geometry.
+`angle(ANGLE)+offset => feature,`                    | `angle(45)+15 => R<5>,`        | Positions a 5x5 rectangle 15 units away from the centeroid of its wrapping feature, at a 45 degree angle.
 
 Putting it all together looks like this:
 

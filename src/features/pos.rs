@@ -4,60 +4,86 @@ use std::fmt;
 
 /// How a feature should be positioned relative to an inner feature.
 #[derive(Debug, Clone)]
-pub struct Positioning {
-    pub side: Direction,
-    pub centerline_adjustment: f64,
-    pub align: Align,
+pub enum Positioning {
+    Cardinal {
+        side: Direction,
+        centerline_adjustment: f64,
+        align: Align,
+    },
+    Angle {
+        degrees: f64,
+        amount: f64,
+    },
 }
 
 impl Positioning {
     fn compute_translation(&self, bounds: geo::Rect<f64>, feature: geo::Rect<f64>) -> (f64, f64) {
-        match self.side {
-            Direction::Left => (
-                bounds.min().x - self.compute_align_ref(feature),
-                bounds.center().y - feature.center().y
-                    + (self.centerline_adjustment * bounds.height()),
-            ),
-            Direction::Right => (
-                bounds.max().x - self.compute_align_ref(feature),
-                bounds.center().y - feature.center().y
-                    + (self.centerline_adjustment * bounds.height()),
-            ),
-            Direction::Up => (
-                bounds.center().x - feature.center().x
-                    + (self.centerline_adjustment * bounds.width()),
-                bounds.min().y - self.compute_align_ref(feature),
-            ),
-            Direction::Down => (
-                bounds.center().x - feature.center().x
-                    + (self.centerline_adjustment * bounds.width()),
-                bounds.max().y - self.compute_align_ref(feature),
-            ),
+        match self {
+            Positioning::Cardinal {
+                side,
+                centerline_adjustment,
+                align: _,
+            } => match side {
+                Direction::Left => (
+                    bounds.min().x - self.compute_align_ref(feature),
+                    bounds.center().y - feature.center().y
+                        + (centerline_adjustment * bounds.height()),
+                ),
+                Direction::Right => (
+                    bounds.max().x - self.compute_align_ref(feature),
+                    bounds.center().y - feature.center().y
+                        + (centerline_adjustment * bounds.height()),
+                ),
+                Direction::Up => (
+                    bounds.center().x - feature.center().x
+                        + (centerline_adjustment * bounds.width()),
+                    bounds.min().y - self.compute_align_ref(feature),
+                ),
+                Direction::Down => (
+                    bounds.center().x - feature.center().x
+                        + (centerline_adjustment * bounds.width()),
+                    bounds.max().y - self.compute_align_ref(feature),
+                ),
+            },
+            Positioning::Angle { degrees, amount } => {
+                let r = degrees * std::f64::consts::PI / 180.;
+                (
+                    bounds.center().x + (amount * r.cos()),
+                    bounds.center().y + (amount * r.sin()),
+                )
+            }
         }
     }
 
     fn compute_align_ref(&self, feature: geo::Rect<f64>) -> f64 {
-        match self.side {
-            Direction::Left => match self.align {
-                Align::Start => feature.min().x,
-                Align::Center => feature.center().x,
-                Align::End => feature.max().x,
+        match self {
+            Positioning::Cardinal {
+                side,
+                align,
+                centerline_adjustment: _,
+            } => match side {
+                Direction::Left => match align {
+                    Align::Start => feature.min().x,
+                    Align::Center => feature.center().x,
+                    Align::End => feature.max().x,
+                },
+                Direction::Right => match align {
+                    Align::Start => feature.max().x,
+                    Align::Center => feature.center().x,
+                    Align::End => feature.min().x,
+                },
+                Direction::Up => match align {
+                    Align::Start => feature.min().y,
+                    Align::Center => feature.center().y,
+                    Align::End => feature.max().y,
+                },
+                Direction::Down => match align {
+                    Align::Start => feature.max().y,
+                    Align::Center => feature.center().y,
+                    Align::End => feature.min().y,
+                },
             },
-            Direction::Right => match self.align {
-                Align::Start => feature.max().x,
-                Align::Center => feature.center().x,
-                Align::End => feature.min().x,
-            },
-            Direction::Up => match self.align {
-                Align::Start => feature.min().y,
-                Align::Center => feature.center().y,
-                Align::End => feature.max().y,
-            },
-            Direction::Down => match self.align {
-                Align::Start => feature.max().y,
-                Align::Center => feature.center().y,
-                Align::End => feature.min().y,
-            },
+            Positioning::Angle { .. } => unreachable!(),
         }
     }
 }
@@ -81,7 +107,7 @@ where
         if let Some(left) = left {
             elements.push((
                 left,
-                Positioning {
+                Positioning::Cardinal {
                     side: Direction::Left,
                     centerline_adjustment: 0.0,
                     align: Align::Center,
@@ -91,7 +117,7 @@ where
         if let Some(right) = right {
             elements.push((
                 right,
-                Positioning {
+                Positioning::Cardinal {
                     side: Direction::Right,
                     centerline_adjustment: 0.0,
                     align: Align::Center,
@@ -119,7 +145,7 @@ where
         let mut elements = Vec::with_capacity(2);
         elements.push((
             left,
-            Positioning {
+            Positioning::Cardinal {
                 side: Direction::Left,
                 centerline_adjustment: 0.0,
                 align: Align::Center,
@@ -138,7 +164,7 @@ where
         let mut elements = Vec::with_capacity(2);
         elements.push((
             right,
-            Positioning {
+            Positioning::Cardinal {
                 side: Direction::Right,
                 centerline_adjustment: 0.0,
                 align: Align::Center,

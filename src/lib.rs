@@ -602,4 +602,21 @@ mod tests {
             assert!(panel.interior_geometry()[i].bounds().unwrap().center().y > -2.01);
         }
     }
+
+    #[test]
+    fn test_atpos_angle() {
+        let mut r = features::AtPos::<features::Rect, features::Rect>::new(
+            features::Rect::with_center([4., 2.].into(), 1., 1.),
+        );
+        r.push(
+            features::Rect::with_center([0., 0.].into(), 1., 1.),
+            features::Positioning::Angle {
+                degrees: 45.,
+                amount: 3.,
+            },
+        );
+        let ig = r.edge_union().unwrap();
+        use geo::prelude::Contains;
+        assert!(ig.contains(&geo::Coordinate::from([5.8, 3.8])));
+    }
 }

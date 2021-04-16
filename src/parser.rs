@@ -161,12 +161,15 @@ impl WrapPosition {
                 side,
                 offset,
                 align,
-            } => Ok(crate::features::Positioning {
+            } => Ok(crate::features::Positioning::Cardinal {
                 side,
                 align,
                 centerline_adjustment: offset.rfloat(r)?,
             }),
-            WrapPosition::Angle { .. } => unimplemented!(),
+            WrapPosition::Angle { angle, offset } => Ok(crate::features::Positioning::Angle {
+                degrees: angle.rfloat(r)?,
+                amount: offset.rfloat(r)?,
+            }),
         }
     }
 }
@@ -348,7 +351,7 @@ impl AST {
                             let mut out = crate::features::AtPos::new(left);
                             out.push(
                                 inner.into_feature(ctx)?,
-                                crate::features::Positioning {
+                                crate::features::Positioning::Cardinal {
                                     side: Direction::Right,
                                     align: crate::Align::End,
                                     centerline_adjustment: 0.,
