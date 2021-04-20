@@ -217,6 +217,9 @@ pub enum AST {
     Tuple {
         inners: Vec<Box<AST>>,
     },
+    Negative {
+        inners: Vec<Box<AST>>,
+    },
 }
 
 impl AST {
@@ -364,6 +367,12 @@ impl AST {
 
                 Ok(out.unwrap())
             }
+            AST::Negative { inners } => Ok(Box::new(crate::features::Negative::new(
+                inners
+                    .into_iter()
+                    .map(|f| f.into_feature(ctx))
+                    .collect::<Result<Vec<_>, Err>>()?,
+            ))),
             AST::Assign(_, _) => unreachable!(),
             AST::Comment(_) => unreachable!(),
             AST::Cel(_) => unreachable!(),
@@ -1005,6 +1014,32 @@ fn parse_tuple(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     Ok((i, AST::Tuple { inners: elements }))
 }
 
+fn parse_negative(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (_, _, inners)) = context(
+        "negative",
+        delimited(
+            tuple((tag_no_case("negative"), multispace0)),
+            tuple((
+                multispace0,
+                tag("{"),
+                fold_many1(
+                    tuple((parse_geo, multispace0, opt(tag(",")))),
+                    Vec::new(),
+                    |mut acc, (inner, _, _)| {
+                        acc.push(Box::new(inner));
+                        acc
+                    },
+                ),
+            )),
+            tuple((tag("}"), multispace0)),
+        ),
+    )(i)?;
+
+    Ok((i, AST::Negative { inners: inners }))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     alt((
         parse_assign,
@@ -1018,6 +1053,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
         parse_column_layout,
         parse_var,
         parse_tuple,
+        parse_negative,
         parse_comment,
     ))(i)
 }
@@ -1359,6 +1395,32 @@ mod tests {
                     matches!(*inners[1], AST::Rect{ coords: None, size: Some((Value::Float(w), Value::Float(h))), inner: _, rounded: None } if
                         w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
                     )
+                )
+            )
+        );
+    }
+
+    #[test]
+    fn test_negative() {
+        let out = parse_geo("negative{C<2>}");
+        //eprintln!("{:?}", out);
+        assert!(
+            matches!(out, Ok(("", AST::Negative{ inners })) if inners.len() == 1 &&
+                matches!(&*inners[0], AST::Circle{ coords: None, radius: r, inner: None }  if
+                    r.float() > 1.99 && r.float() < 2.01
+                )
+            )
+        );
+
+        let out = parse_geo("negative {\n C<2>,\n   R<4>\n\n}");
+        // eprintln!("{:?}", out);
+        assert!(
+            matches!(out, Ok(("", AST::Negative{ inners })) if inners.len() == 2 &&
+                matches!(&*inners[0], AST::Circle{ coords: None, radius: r, inner: None }  if
+                    r.float() > 1.99 && r.float() < 2.01
+                ) &&
+                matches!(*inners[1], AST::Rect{ coords: None, size: Some((Value::Float(w), Value::Float(h))), inner: _, rounded: None }  if
+                    w > 3.99 && w < 4.01 && h > 3.99 && h < 4.01
                 )
             )
         );
