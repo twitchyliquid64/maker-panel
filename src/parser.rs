@@ -942,17 +942,25 @@ fn parse_wrap(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, elements) = fold_many1(
         context(
             "pos spec",
-            tuple((
-                alt((parse_pos_spec, parse_about_spec)),
-                multispace0,
-                parse_geo,
-                multispace0,
-                opt(tag(",")),
+            alt((
+                nom::combinator::map(
+                    tuple((
+                        alt((parse_pos_spec, parse_about_spec)),
+                        multispace0,
+                        parse_geo,
+                        multispace0,
+                        opt(tag(",")),
+                    )),
+                    |s| Some(s),
+                ),
+                nom::combinator::map(parse_comment, |_| None),
             )),
         ),
         Vec::new(),
-        |mut acc, (pos, _, feature, _, _)| {
-            acc.push((pos, Box::new(feature)));
+        |mut acc, feature| {
+            if let Some((pos, _, feature, _, _)) = feature {
+                acc.push((pos, Box::new(feature)));
+            }
             acc
         },
     )(i)?;
@@ -1346,7 +1354,7 @@ mod tests {
         ));
 
         let out = parse_geo(
-            "wrap ($inner) with {\n  left => (C<2>(h), C<2>),\n  right => (C<2>(h), C<2>),\n}",
+            "wrap ($inner) with {\n  left => (C<2>(h), C<2>),\n # test comment\n right => (C<2>(h), C<2>),\n}",
         );
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if

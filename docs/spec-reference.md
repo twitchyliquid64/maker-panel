@@ -41,8 +41,7 @@ R<5>(h)
 
 ### Comments
 
-All comments start with a `#` and extend for the remainder of the line. For now,
-comments within a `wrap()` feature don't work.
+All comments start with a `#` and extend for the remainder of the line.
 
 ### Variables
 
