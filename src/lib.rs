@@ -158,16 +158,7 @@ impl<'a> Panel<'a> {
                 acc
             });
 
-        for f in &self.features {
-            if let Some(sub) = f.edge_subtract() {
-                edge = match edge {
-                    Some(e) => Some(e.difference(&sub)),
-                    None => None,
-                };
-            }
-        }
-
-        match (&edge, self.convex_hull) {
+        edge = match (&edge, self.convex_hull) {
             (Some(edges), true) => {
                 use geo::algorithm::convex_hull;
                 let mut points = edges
@@ -190,7 +181,18 @@ impl<'a> Panel<'a> {
                 Some((vec![poly]).into())
             }
             _ => edge,
+        };
+
+        for f in &self.features {
+            if let Some(sub) = f.edge_subtract() {
+                edge = match edge {
+                    Some(e) => Some(e.difference(&sub)),
+                    None => None,
+                };
+            }
         }
+
+        edge
     }
 
     fn edge_poly(&self) -> Result<geo::Polygon<f64>, Err> {
