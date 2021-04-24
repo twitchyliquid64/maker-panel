@@ -62,12 +62,9 @@ fn gerber_prelude<'a>(
     commands
 }
 
-fn emit_poly<I: Iterator<Item = geo::Point<f64>>>(
-    commands: &mut Vec<Command>,
-    last: &mut Option<Point<f64>>,
-    points: I,
-) {
+fn emit_poly<I: Iterator<Item = geo::Point<f64>>>(commands: &mut Vec<Command>, points: I) {
     let cf = CoordinateFormat::new(4, 6);
+    let mut last: Option<Point<f64>> = None;
 
     for point in points {
         if let Some(cmd) = match last {
@@ -114,7 +111,7 @@ fn emit_poly<I: Iterator<Item = geo::Point<f64>>>(
             commands.push(gerber_types::Command::FunctionCode(cmd));
         }
 
-        *last = Some(point.clone());
+        last = Some(point.clone());
     }
 }
 
@@ -128,10 +125,9 @@ pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
     );
     commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
 
-    let mut last: Option<Point<f64>> = None;
-    emit_poly(&mut commands, &mut last, poly.exterior().points_iter());
+    emit_poly(&mut commands, poly.exterior().points_iter());
     for poly in poly.interiors() {
-        emit_poly(&mut commands, &mut last, poly.points_iter());
+        emit_poly(&mut commands, poly.points_iter());
     }
 
     commands.push(FunctionCode::MCode(MCode::EndOfFile).into());

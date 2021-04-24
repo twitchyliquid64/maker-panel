@@ -70,8 +70,11 @@ impl<U: super::InnerFeature + Clone + std::fmt::Debug> super::Feature for Circle
         let right_edge: Point<_> = (self.center.x + self.radius, self.center.y).into();
         let mut out = Vec::with_capacity(361);
 
-        for i in 0..=360 {
-            out.push(right_edge.rotate_around_point(i as f64, self.center.into()));
+        let num_points = (self.radius * 20.0).ceil() as usize;
+        let step = 360.0 / num_points as f64;
+
+        for i in 0..=num_points {
+            out.push(right_edge.rotate_around_point(i as f64 * step, self.center.into()));
         }
 
         Some(MultiPolygon(vec![Polygon::new(
