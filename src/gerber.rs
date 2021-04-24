@@ -62,18 +62,14 @@ fn gerber_prelude<'a>(
     commands
 }
 
-/// Serializes a representation of edge geometry in extender gerber format.
-pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
+fn emit_poly<I: Iterator<Item = geo::Point<f64>>>(
+    commands: &mut Vec<Command>,
+    last: &mut Option<Point<f64>>,
+    points: I,
+) {
     let cf = CoordinateFormat::new(4, 6);
-    let mut commands = gerber_prelude(
-        cf,
-        Some(FileFunction::Profile(Profile::NonPlated)),
-        [(10, ApertureType::Circle(0.01))].iter(),
-    );
-    commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
 
-    let mut last: Option<Point<f64>> = None;
-    for point in poly.exterior().points_iter() {
+    for point in points {
         if let Some(cmd) = match last {
             None => FunctionCode::DCode(DCode::Operation(Operation::Move(Coordinates::new(
                 CoordinateNumber::try_from(point.x()).unwrap(),
@@ -118,7 +114,24 @@ pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
             commands.push(gerber_types::Command::FunctionCode(cmd));
         }
 
-        last = Some(point.clone());
+        *last = Some(point.clone());
+    }
+}
+
+/// Serializes a representation of edge geometry in extender gerber format.
+pub fn serialize_edge(poly: Polygon<f64>) -> Result<Vec<Command>, ()> {
+    let cf = CoordinateFormat::new(4, 6);
+    let mut commands = gerber_prelude(
+        cf,
+        Some(FileFunction::Profile(Profile::NonPlated)),
+        [(10, ApertureType::Circle(0.01))].iter(),
+    );
+    commands.push(FunctionCode::DCode(DCode::SelectAperture(10)).into());
+
+    let mut last: Option<Point<f64>> = None;
+    emit_poly(&mut commands, &mut last, poly.exterior().points_iter());
+    for poly in poly.interiors() {
+        emit_poly(&mut commands, &mut last, poly.points_iter());
     }
 
     commands.push(FunctionCode::MCode(MCode::EndOfFile).into());

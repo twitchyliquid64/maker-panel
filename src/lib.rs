@@ -339,7 +339,6 @@ impl<'a> Panel<'a> {
             }
         }
         path.push_close_path();
-
         rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
             stroke: Some(usvg::Stroke {
                 paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
@@ -349,6 +348,29 @@ impl<'a> Panel<'a> {
             data: std::rc::Rc::new(path),
             ..usvg::Path::default()
         }));
+
+        for inners in edges.interiors() {
+            let mut path = usvg::PathData::new();
+            let mut has_moved = false;
+            for point in inners.points_iter() {
+                if !has_moved {
+                    has_moved = true;
+                    path.push_move_to(point.x(), point.y());
+                } else {
+                    path.push_line_to(point.x(), point.y());
+                }
+            }
+            path.push_close_path();
+            rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                stroke: Some(usvg::Stroke {
+                    paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
+                    width: usvg::StrokeWidth::new(0.1),
+                    ..usvg::Stroke::default()
+                }),
+                data: std::rc::Rc::new(path),
+                ..usvg::Path::default()
+            }));
+        }
 
         for inner in self.interior_geometry() {
             match inner {

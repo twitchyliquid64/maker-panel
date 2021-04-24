@@ -2,7 +2,7 @@
 name = "maker-panel"
 description = "Generator for modular mechanical panels"
 license = "MIT"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Tom <twitchyliquid64@ciphersink.net>"]
 edition = "2018"
 
@@ -37,4 +37,5 @@ text = ["ibm437", "embedded-graphics", "png", "resvg/text", "usvg/text"]
 test-case = "1.0"
 
 [patch.crates-io]
-cel-interpreter = { git = 'https://github.com/twitchyliquid64/cel-rust', branch = 'master' }
+cel-interpreter = { git = 'https://github.com/orf/cel-rust', branch = 'master' }
+#cel-interpreter = { git = 'https://github.com/twitchyliquid64/cel-rust', branch = 'master' }

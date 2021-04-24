@@ -1489,7 +1489,7 @@ mod tests {
         let out = build("let bleh = !{1 + 1}\nlet ye = !{bleh + 2}");
         assert!(matches!(out, Ok(_)));
 
-        let out = build("let v2 = !{1 + 1}\nR<$v2>");
+        let out = build("let v2 = !{1 * 1}\nR<$v2>");
         assert!(matches!(out, Ok(v) if v.len() == 1));
 
         let out = build("R<$missing>");
