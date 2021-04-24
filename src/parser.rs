@@ -148,6 +148,11 @@ pub enum WrapPosition {
         offset: Value,
         align: crate::Align,
     },
+    Corner {
+        side: Direction,
+        opposite: bool,
+        align: crate::Align,
+    },
     Angle {
         angle: Value,
         offset: Value,
@@ -165,6 +170,15 @@ impl WrapPosition {
                 side,
                 align,
                 centerline_adjustment: offset.rfloat(r)?,
+            }),
+            WrapPosition::Corner {
+                side,
+                opposite,
+                align,
+            } => Ok(crate::features::Positioning::Corner {
+                side,
+                align,
+                opposite,
             }),
             WrapPosition::Angle { angle, offset } => Ok(crate::features::Positioning::Angle {
                 degrees: angle.rfloat(r)?,
@@ -921,6 +935,76 @@ fn parse_about_spec(i: &str) -> IResult<&str, WrapPosition, VerboseError<&str>> 
     ))
 }
 
+fn parse_wrap_center_spec(i: &str) -> IResult<&str, WrapPosition, VerboseError<&str>> {
+    let (i, _) = tuple((
+        tuple((multispace0, tag_no_case("center"))),
+        multispace0,
+        tag("=>"),
+    ))(i)?;
+
+    Ok((
+        i,
+        WrapPosition::Angle {
+            angle: Value::Float(0.0),
+            offset: Value::Float(0.0),
+        },
+    ))
+}
+
+fn parse_corner_spec(i: &str) -> IResult<&str, WrapPosition, VerboseError<&str>> {
+    let (i, (_, opp, side, _, align, _)) = tuple((
+        multispace0,
+        alt((tag_no_case("min-"), tag_no_case("max-"))),
+        alt((
+            tag_no_case("left"),
+            tag_no_case("right"),
+            tag_no_case("up"),
+            tag_no_case("down"),
+            tag_no_case("top"),
+            tag_no_case("bottom"),
+        )),
+        multispace0,
+        opt(tuple((
+            multispace0,
+            tag_no_case("align"),
+            multispace0,
+            alt((
+                tag_no_case("center"),
+                tag_no_case("exterior"),
+                tag_no_case("interior"),
+            )),
+            multispace0,
+        ))),
+        tag("=>"),
+    ))(i)?;
+
+    Ok((
+        i,
+        WrapPosition::Corner {
+            side: match side.to_lowercase().as_str() {
+                "left" => Direction::Left,
+                "right" => Direction::Right,
+                "top" | "up" => Direction::Up,
+                "bottom" | "down" => Direction::Down,
+                _ => unreachable!(),
+            },
+            opposite: match opp.to_lowercase().as_str() {
+                "min-" => false,
+                "max-" => true,
+                _ => unreachable!(),
+            },
+            align: match align {
+                Some((_, _, _, align, _)) => match align.to_lowercase().as_str() {
+                    "exterior" => crate::Align::End,
+                    "interior" => crate::Align::Start,
+                    _ => crate::Align::Center,
+                },
+                _ => crate::Align::Center,
+            },
+        },
+    ))
+}
+
 fn parse_wrap(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
 
@@ -945,7 +1029,12 @@ fn parse_wrap(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
             alt((
                 nom::combinator::map(
                     tuple((
-                        alt((parse_pos_spec, parse_about_spec)),
+                        alt((
+                            parse_pos_spec,
+                            parse_about_spec,
+                            parse_wrap_center_spec,
+                            parse_corner_spec,
+                        )),
                         multispace0,
                         parse_geo,
                         multispace0,
@@ -1371,6 +1460,20 @@ mod tests {
             a1 < 91. && a1 > 89.) &&
             matches!(features[1].0, WrapPosition::Angle{ offset: Value::Float(o2), .. } if
            o2 > 24. && o2 < 26.)
+        ));
+
+        let out = parse_geo("wrap ($inner) with {\n  center => C<2>,\n}");
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 1 &&
+            matches!(features[0].0, WrapPosition::Angle{ angle: Value::Float(a1), .. } if
+            a1 < 0.1 && a1 > -0.1)
+        ));
+
+        let out = parse_geo("wrap ($inner) with {\n  min-left align exterior => C<2>,\n}");
+        // eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Wrap { inner, features })) if
+            matches!(*inner, AST::VarRef(ref var) if var == "inner") && features.len() == 1 &&
+            matches!(features[0].0, WrapPosition::Corner{ side: Direction::Left, align: crate::Align::End, opposite: false})
         ));
     }
 

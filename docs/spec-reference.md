@@ -213,11 +213,13 @@ the center one) should be laid out. You write these sections like this:
 
 Form                                                 | Example                        | Meaning
 ---------------------------------------------------- | ------------------------------ | ------------
-`top/bottom/left/right => feature,`                  | `top => R<5>,`                 | Positions a 5x5 rectangle to the center-top of its wrapping feature, overlapping halfway.
-`top/bottom/left/right+offset => feature,`           | `top-0.5 => R<5>,`             | Positions a 5x5 rectangle to the top-left of its wrapping feature, overlapping halfway.
-`top/bottom/left/right align interior => feature,`   | `top align interior => R<5>,`  | Aligns a 5x5 rectangle to the center-top of its wrapping feature, completely contained within the feature it wraps.
-`top/bottom/left/right align exterior => feature,`   | `top align exterior => R<5>,`  | Positions a 5x5 rectangle to the center-top of its wrapping feature, touching edges with the feature it wraps but otherwise outside of its geometry.
-`angle(ANGLE)+offset => feature,`                    | `angle(45)+15 => R<5>,`        | Positions a 5x5 rectangle 15 units away from the centeroid of its wrapping feature, at a 45 degree angle.
+`top/bottom/left/right => feature,`                  | `top => R<5>,`                     | Positions a 5x5 rectangle to the center-top of its wrapping feature, overlapping halfway.
+`top/bottom/left/right+offset => feature,`           | `top-0.5 => R<5>,`                 | Positions a 5x5 rectangle to the top-left of its wrapping feature, overlapping halfway.
+`top/bottom/left/right align interior => feature,`   | `top align interior => R<5>,`      | Aligns a 5x5 rectangle to the center-top of its wrapping feature, completely contained within the feature it wraps.
+`top/bottom/left/right align exterior => feature,`   | `top align exterior => R<5>,`      | Positions a 5x5 rectangle to the center-top of its wrapping feature, touching edges with the feature it wraps but otherwise outside of its geometry.
+`min/max-top/bottom/left/right => feature,`          | `min-left align exterior => R<5>,` | Positions a 5x5 rectangle to the left of its wrapping feature, aligned across the top.
+`angle(ANGLE)+offset => feature,`                    | `angle(45)+15 => R<5>,`            | Positions a 5x5 rectangle 15 units away from the centeroid of its wrapping feature, at a 45 degree angle.
+`center => feature,`                                 | `center => R<5>,`                  | Positions a 5x5 rectangle at the centeroid of its wrapping feature.
 
 Putting it all together looks like this:
 
@@ -229,6 +231,18 @@ wrap (R<30, 10>) with {
 ```
 
 _Positions two circles at either end of a rectangle._
+
+#### Negative
+
+A negative makes all the children features cut-outs rather than unions. So if you have
+a circle in a larger circle, it will produce a ring.
+
+```
+negative {
+  C<5>
+}
+C<10>
+```
 
 ## Other language constructs
 

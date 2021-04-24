@@ -10,6 +10,11 @@ pub enum Positioning {
         centerline_adjustment: f64,
         align: Align,
     },
+    Corner {
+        side: Direction,
+        opposite: bool,
+        align: Align,
+    },
     Angle {
         degrees: f64,
         amount: f64,
@@ -45,6 +50,40 @@ impl Positioning {
                     bounds.max().y - self.compute_align_ref(feature),
                 ),
             },
+            Positioning::Corner {
+                side,
+                opposite,
+                align: _,
+            } => match side {
+                Direction::Left => (
+                    bounds.min().x - self.compute_align_ref(feature),
+                    match opposite {
+                        false => bounds.min().y - feature.min().y,
+                        true => bounds.max().y - feature.max().y,
+                    },
+                ),
+                Direction::Right => (
+                    bounds.max().x - self.compute_align_ref(feature),
+                    match opposite {
+                        false => bounds.min().y - feature.min().y,
+                        true => bounds.max().y - feature.max().y,
+                    },
+                ),
+                Direction::Up => (
+                    match opposite {
+                        false => bounds.min().x - feature.min().x,
+                        true => bounds.max().x - feature.max().x,
+                    },
+                    bounds.min().y - self.compute_align_ref(feature),
+                ),
+                Direction::Down => (
+                    match opposite {
+                        false => bounds.min().x - feature.min().x,
+                        true => bounds.max().x - feature.max().x,
+                    },
+                    bounds.max().y - self.compute_align_ref(feature),
+                ),
+            },
             Positioning::Angle { degrees, amount } => {
                 let r = degrees * std::f64::consts::PI / 180.;
                 (
@@ -61,6 +100,32 @@ impl Positioning {
                 side,
                 align,
                 centerline_adjustment: _,
+            } => match side {
+                Direction::Left => match align {
+                    Align::Start => feature.min().x,
+                    Align::Center => feature.center().x,
+                    Align::End => feature.max().x,
+                },
+                Direction::Right => match align {
+                    Align::Start => feature.max().x,
+                    Align::Center => feature.center().x,
+                    Align::End => feature.min().x,
+                },
+                Direction::Up => match align {
+                    Align::Start => feature.min().y,
+                    Align::Center => feature.center().y,
+                    Align::End => feature.max().y,
+                },
+                Direction::Down => match align {
+                    Align::Start => feature.max().y,
+                    Align::Center => feature.center().y,
+                    Align::End => feature.min().y,
+                },
+            },
+            Positioning::Corner {
+                side,
+                align,
+                opposite: _,
             } => match side {
                 Direction::Left => match align {
                     Align::Start => feature.min().x,

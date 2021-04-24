@@ -643,4 +643,37 @@ mod tests {
         use geo::prelude::Contains;
         assert!(ig.contains(&geo::Coordinate::from([5.8, 3.8])));
     }
+
+    #[test]
+    fn test_atpos_corner() {
+        let mut r = features::AtPos::<features::Rect, features::Rect>::new(
+            features::Rect::with_center([2., 2.].into(), 4., 4.),
+        );
+        r.push(
+            features::Rect::with_center([0., 0.].into(), 0.6, 0.6),
+            features::Positioning::Corner {
+                side: Direction::Left,
+                align: Align::End,
+                opposite: false,
+            },
+        );
+        let ig = r.edge_union().unwrap();
+        use geo::prelude::Contains;
+        assert!(ig.contains(&geo::Coordinate::from([-0.5, 0.5])));
+
+        let mut r = features::AtPos::<features::Rect, features::Rect>::new(
+            features::Rect::with_center([2., 2.].into(), 4., 4.),
+        );
+        r.push(
+            features::Rect::with_center([0., 0.].into(), 0.6, 0.6),
+            features::Positioning::Corner {
+                side: Direction::Up,
+                align: Align::End,
+                opposite: true,
+            },
+        );
+        let ig = r.edge_union().unwrap();
+        // eprintln!("{:?}", ig);
+        assert!(ig.contains(&geo::Coordinate::from([3.9, -0.5])));
+    }
 }
