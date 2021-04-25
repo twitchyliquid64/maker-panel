@@ -247,6 +247,36 @@ where
     pub fn push(&mut self, feature: S, pos: Positioning) {
         self.elements.push((feature, pos));
     }
+
+    fn feature_bounds(&self, feature: &S) -> Option<geo::Rect<f64>> {
+        let union_bounds = if let Some(geo) = feature.edge_union() {
+            Some(compute_bounds(geo.clone()))
+        } else {
+            None
+        };
+
+        let subtract_bounds = if let Some(geo) = feature.edge_subtract() {
+            Some(compute_bounds(geo.clone()))
+        } else {
+            None
+        };
+
+        match (union_bounds, subtract_bounds) {
+            (Some(b), None) => Some(b),
+            (None, Some(b)) => Some(b),
+            (Some(u), Some(s)) => {
+                use geo::bounding_rect::BoundingRect;
+                use geo_booleanop::boolean::BooleanOp;
+                Some(
+                    u.to_polygon()
+                        .union(&s.to_polygon())
+                        .bounding_rect()
+                        .unwrap(),
+                )
+            }
+            (None, None) => None,
+        }
+    }
 }
 
 fn compute_bounds(poly: MultiPolygon<f64>) -> geo::Rect<f64> {
@@ -285,7 +315,7 @@ where
 
         for (feature, position) in &self.elements {
             if let Some(mut geo) = feature.edge_union() {
-                let t = position.compute_translation(bounds, compute_bounds(geo.clone()));
+                let t = position.compute_translation(bounds, self.feature_bounds(feature).unwrap());
                 geo.translate_inplace(t.0, t.1);
                 out = out.union(&geo)
             }
@@ -313,7 +343,7 @@ where
             if let Some(mut geo) = feature.edge_subtract() {
                 use geo::algorithm::translate::Translate;
                 use geo_booleanop::boolean::BooleanOp;
-                let t = position.compute_translation(bounds, compute_bounds(geo.clone()));
+                let t = position.compute_translation(bounds, self.feature_bounds(feature).unwrap());
                 geo.translate_inplace(t.0, t.1);
                 out = out.union(&geo)
             }
@@ -344,9 +374,8 @@ where
                 self.elements
                     .iter()
                     .map(|(feature, position)| {
-                        if let Some(geo) = feature.edge_union() {
-                            let t =
-                                position.compute_translation(bounds, compute_bounds(geo.clone()));
+                        if let Some(feature_bounds) = self.feature_bounds(feature) {
+                            let t = position.compute_translation(bounds, feature_bounds);
                             let mut out = feature.interior();
                             for a in out.iter_mut() {
                                 a.translate(t.0, t.1);
