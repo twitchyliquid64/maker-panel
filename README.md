@@ -23,6 +23,8 @@ wrap (column center {
 }
 ```
 
+_A center-aligned column of holes, spaced 15mm (7.5 * 2) apart, with circles positioned about each end such to round out the edges of the rectangle with semi-circles._
+
 Makes this:
 
 <p align="center">
