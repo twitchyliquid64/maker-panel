@@ -369,6 +369,7 @@ pub fn serialize_layer(
     Ok(commands)
 }
 
+#[cfg(feature = "text")]
 fn flash_text(
     text: &str,
     lx: f64,
@@ -396,4 +397,15 @@ fn flash_text(
             }
         }
     }
+}
+
+#[cfg(not(feature = "text"))]
+fn flash_text(
+    text: &str,
+    lx: f64,
+    ly: f64,
+    d_code: i32,
+    cf: CoordinateFormat,
+    commands: &mut Vec<Command>,
+) {
 }

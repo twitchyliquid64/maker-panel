@@ -415,6 +415,8 @@ impl<'a> Panel<'a> {
                         data: std::rc::Rc::new(p),
                         ..usvg::Path::default()
                     }));
+
+                    #[cfg(feature = "text")]
                     rtree
                         .root()
                         .append_kind(usvg::NodeKind::Image(text::blit_text_span(

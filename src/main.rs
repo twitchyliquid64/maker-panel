@@ -182,6 +182,7 @@ impl std::str::FromStr for Fmt {
             "drl" | "pdrl" => Ok(Fmt::PlatedDrill),
             "ndrl" | "npdrl" => Ok(Fmt::NonPlatedDrill),
             "zip" | "all" => Ok(Fmt::Zip),
+            #[cfg(feature = "tessellate")]
             "stl" => Ok(Fmt::Stl),
             "fab" | "cmts.user" => Ok(Fmt::FabInstructions),
             _ => Err(format!("no such fmt: {}", s).to_string()),
