@@ -5,3 +5,6 @@
 /test.gto
 /test.gts
 /Cmts.User
+
+/wasm/target
+/wasm/pkg

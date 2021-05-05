@@ -1,0 +1,13 @@
+[package]
+name = "maker-panel-wasm"
+version = "0.1.0"
+authors = ["Tom <twitchyliquid64@ciphersink.net>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+maker-panel = { path = "../", default-features = false }
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+serde = { version = "1.0", features = ["derive"] }
