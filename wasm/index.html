@@ -36,11 +36,11 @@
 
 
     <script type="module">
-      import init, {check_parse_err} from "./pkg/maker_panel_wasm.js";
+      import init, {check_parse_err, maker_panel_version, render} from "./pkg/maker_panel_wasm.js";
       init()
         .then(() => {
           // Remove the loading message.
-          document.getElementById('loading').innerText = "";
+          document.getElementById('loading').innerText = " maker panel v" + maker_panel_version();
 
           // Check the syntax and print any errors if maker-panel expressions
           // are typed.
@@ -52,6 +52,7 @@
               var parse_result = check_parse_err(code.value);
               if (!parse_result) {
                 err.innerText = "✓ Panel valid";
+                console.log(render(code.value));
               } else {
                 if (parse_result.Parse) {
                   err.innerText = "Syntax invalid:\n" + parse_result.Parse;
