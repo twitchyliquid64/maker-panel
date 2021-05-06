@@ -9,10 +9,27 @@
         font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
       }
 
-      textarea {
+      #err {
+        margin-left: 6px;
+      }
+
+      .row {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
         width: 100%;
+        margin-top: 12px;
+      }
+
+      .column {
+        display: flex;
+        flex-direction: column;
+        flex-basis: 100%;
+        flex: 1;
+      }
+
+      textarea {
         height: 25em;
-        max-width: 100%;
       }
     </style>
 
@@ -25,15 +42,17 @@
         <a href="https://github.com/twitchyliquid64/maker-panel">[Github]</a>
         <span id="loading">Backend loading, please wait.</span>
       </p>
-      <div style="width: 70%;">
-        <textarea id="code"></textarea>
-      </div>
-      <div style="top: 1px; right: 1em; position: fixed; align: center;">
-        <p id="err"></p>
-      </div>
-      <div style="clear: both;"></div>
-    </div>
 
+      <div class='row'>
+        <div class='column' style="flex: 2;">
+          <textarea id="code"></textarea>
+        </div>
+        <div class='column'>
+          <span id="err"></span>
+        </div>
+      </div>
+
+    </div>
 
     <script type="module">
       import init, {check_parse_err, maker_panel_version, render} from "./pkg/maker_panel_wasm.js";
@@ -52,7 +71,6 @@
               var parse_result = check_parse_err(code.value);
               if (!parse_result) {
                 err.innerText = "✓ Panel valid";
-                console.log(render(code.value));
               } else {
                 if (parse_result.Parse) {
                   err.innerText = "Syntax invalid:\n" + parse_result.Parse;
@@ -67,6 +85,15 @@
             }
 
           }, false);
+
+          function handle_hotkeys(e) {
+            if (e.ctrlKey && e.key === 'r') {
+              console.log(render(code.value));
+              e.preventDefault();
+            };
+          }
+          code.onkeydown = handle_hotkeys;
+
         });
     </script>
   </body>
