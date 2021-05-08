@@ -592,7 +592,7 @@ dependencies = [
 
 [[package]]
 name = "maker-panel"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "cel-interpreter",
  "conv",
@@ -610,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "maker-panel-wasm"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "maker-panel",
  "serde",

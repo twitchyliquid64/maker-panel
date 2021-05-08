@@ -99,20 +99,58 @@
 
           }, false);
 
+          function to_color(c) {
+            switch (c) {
+            case "FrontCopper":
+              return "#840000"
+            case "FrontMask":
+              return "#840084"
+            case "FrontLegend":
+              return "#00cede"
+            case "BackCopper":
+              return "#008400"
+            case "BackMask":
+              return "#840084"
+            case "BackLegend":
+              return "#040084"
+            case "FabricationInstructions":
+              return "#666666"
+            default:
+              return "#252525"
+            }
+          }
+
           function handle_hotkeys(e) {
             if (e.ctrlKey && e.key === 'r') {
               let previous_pan = (pz || {transform: null}).transform;
               let r = render(code.value);
+              console.log(r);
 
               svg.clear();
               var links = svg.group();
               var markers = svg.group();
               var nodes = svg.group();
 
+              // Create the geometry.
               var polygon = nodes.group().polygon(r.outer).fill('none').stroke({ width: 0.2 });
               var bbox = polygon.bbox();
               for (var i = 0; i < r.inners.length; i++) {
                 nodes.group().polygon(r.inners[i]).fill('none').stroke({ width: 0.15 });
+              }
+
+              // Create the surface features.
+              for (var i = 0; i < r.surface_features.length; i++) {
+                const f = r.surface_features[i];
+                if (f.Circle) {
+                  nodes.group().circle(f.Circle.radius * 2)
+                    .center(f.Circle.center[0], f.Circle.center[1])
+                    .fill(to_color(f.Circle.layer)).stroke('none');
+                }
+                if (f.Drill) {
+                  nodes.group().circle(f.Drill.radius * 2)
+                    .center(f.Drill.center[0], f.Drill.center[1])
+                    .fill(to_color('#252525')).stroke('none');
+                }
               }
 
 

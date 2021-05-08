@@ -1,11 +1,11 @@
-use maker_panel::{Layer, Panel, SpecErr};
+use maker_panel::{features::InnerAtom, Layer, Panel, SpecErr};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 mod version;
 
-#[serde(remote = "SpecErr")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(remote = "SpecErr")]
 pub enum Err {
     Parse(String),
     UndefinedVariable(String),
@@ -34,6 +34,49 @@ pub fn maker_panel_version() -> String {
 pub struct Render {
     pub outer: Vec<(f64, f64)>,
     pub inners: Vec<Vec<(f64, f64)>>,
+    pub surface_features: Vec<Surface>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Surface {
+    Drill {
+        center: (f64, f64),
+        radius: f64,
+        plated: bool,
+    },
+    Circle {
+        center: (f64, f64),
+        radius: f64,
+        layer: String,
+    },
+}
+
+impl std::convert::TryFrom<&InnerAtom> for Surface {
+    type Error = ();
+
+    fn try_from(a: &InnerAtom) -> Result<Self, Self::Error> {
+        match a {
+            InnerAtom::Drill {
+                center,
+                radius,
+                plated,
+            } => Ok(Surface::Drill {
+                radius: *radius,
+                plated: *plated,
+                center: (center.x_y().0, center.x_y().1),
+            }),
+            InnerAtom::Circle {
+                center,
+                radius,
+                layer,
+            } => Ok(Surface::Circle {
+                radius: *radius,
+                layer: layer.to_string(),
+                center: (center.x_y().0, center.x_y().1),
+            }),
+            _ => Err(()),
+        }
+    }
 }
 
 #[wasm_bindgen]
@@ -47,9 +90,12 @@ pub fn render(spec: &str) -> JsValue {
         return JsValue::from_serde(&Render {
             outer: vec![],
             inners: vec![],
+            surface_features: vec![],
         })
         .unwrap();
     }
+
+    use std::convert::TryFrom;
     let polys: Vec<_> = edge
         .unwrap()
         .iter()
@@ -59,6 +105,13 @@ pub fn render(spec: &str) -> JsValue {
                 .interiors()
                 .iter()
                 .map(|l| l.points_iter().map(|p| p.x_y()).collect())
+                .collect(),
+            surface_features: panel
+                .interior_geometry()
+                .iter()
+                .map(|f| Surface::try_from(f))
+                .filter(|f| f.is_ok())
+                .map(|f| f.unwrap())
                 .collect(),
         })
         .collect();

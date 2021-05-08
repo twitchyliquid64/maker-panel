@@ -53,6 +53,18 @@ impl Layer {
             Layer::FabricationInstructions => usvg::Color::new(0x66, 0x66, 0x66),
         }
     }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Layer::FrontCopper => String::from("FrontCopper"),
+            Layer::FrontMask => String::from("FrontMask"),
+            Layer::FrontLegend => String::from("FrontLegend"),
+            Layer::BackCopper => String::from("BackCopper"),
+            Layer::BackMask => String::from("BackMask"),
+            Layer::BackLegend => String::from("BackLegend"),
+            Layer::FabricationInstructions => String::from("FabricationInstructions"),
+        }
+    }
 }
 
 /// The direction in which repetitions occur.
