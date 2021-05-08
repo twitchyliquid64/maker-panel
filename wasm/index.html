@@ -31,7 +31,15 @@
       textarea {
         height: 25em;
       }
+
+      #render {
+        height: 100%;
+      }
     </style>
+
+    <script src="./deps/svg.js"></script>
+    <script src="./deps/svg.draggy.js"></script>
+    <script src="./deps/svg.pan-zoom.js"></script>
 
   </head>
   <body>
@@ -49,6 +57,7 @@
         </div>
         <div class='column'>
           <span id="err"></span>
+          <div id="render"></div>
         </div>
       </div>
 
@@ -61,12 +70,16 @@
           // Remove the loading message.
           document.getElementById('loading').innerText = " maker panel v" + maker_panel_version();
 
-          // Check the syntax and print any errors if maker-panel expressions
-          // are typed.
           const code = document.getElementById('code');
           const err = document.getElementById('err');
+          const out = document.getElementById('render');
+          var svg = new SVG(out);
+          var pz = null;
+
           code.addEventListener('input', function() {
             var c = code.value;
+            // Check the syntax and print any errors if maker-panel expressions
+            // are typed.
             if (c != "") {
               var parse_result = check_parse_err(code.value);
               if (!parse_result) {
@@ -88,7 +101,28 @@
 
           function handle_hotkeys(e) {
             if (e.ctrlKey && e.key === 'r') {
-              console.log(render(code.value));
+              let previous_pan = (pz || {transform: null}).transform;
+              let r = render(code.value);
+
+              svg.clear();
+              var links = svg.group();
+              var markers = svg.group();
+              var nodes = svg.group();
+
+              var polygon = nodes.group().polygon(r.outer).fill('none').stroke({ width: 0.2 });
+              var bbox = polygon.bbox();
+              for (var i = 0; i < r.inners.length; i++) {
+                nodes.group().polygon(r.inners[i]).fill('none').stroke({ width: 0.15 });
+              }
+
+
+              // Make the group pannable and zoomable, set starting position.
+              pz = nodes.panZoom();
+              if (previous_pan)
+                pz.setPosition(previous_pan.x, previous_pan.y, previous_pan.scaleX);
+              else
+                pz.setPosition(50-bbox.x, 50-bbox.y, 2);
+
               e.preventDefault();
             };
           }
