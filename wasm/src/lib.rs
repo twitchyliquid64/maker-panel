@@ -80,11 +80,12 @@ impl std::convert::TryFrom<&InnerAtom> for Surface {
 }
 
 #[wasm_bindgen]
-pub fn render(spec: &str) -> JsValue {
+pub fn render(spec: &str, convex_hull: bool) -> JsValue {
     let mut panel = Panel::new();
     if let Err(e) = panel.push_spec(spec) {
         return JsValue::from_serde(&SpecErrHelper(e)).unwrap();
     }
+    panel.convex_hull(convex_hull);
     let edge = panel.edge_geometry();
     if edge.is_none() {
         return JsValue::from_serde(&Render {

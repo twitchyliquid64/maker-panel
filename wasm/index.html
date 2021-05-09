@@ -5,7 +5,7 @@
     <title>maker-panel playground</title>
 
     <style>
-      #err, textarea {
+      #err {
         font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
       }
 
@@ -28,8 +28,14 @@
         flex: 1;
       }
 
-      textarea {
-        height: 25em;
+      .column:last-child {
+        border-left: 1px solid #999;
+      }
+      
+      #code {
+        position: relative;
+        width: 100%;
+        height: 80vh;
       }
 
       #render {
@@ -38,8 +44,11 @@
     </style>
 
     <script src="./deps/svg.js"></script>
+    <!-- Deps licensed under The MIT License (MIT) -->
     <script src="./deps/svg.draggy.js"></script>
     <script src="./deps/svg.pan-zoom.js"></script>
+    <!-- Copyright (c) 2016 Claudio Holanda -->
+    <script src="./deps/codeflask.min.js"></script>
 
   </head>
   <body>
@@ -51,9 +60,9 @@
         <span id="loading">Backend loading, please wait.</span>
       </p>
 
-      <div class='row'>
+      <div class='row' id='interactables'>
         <div class='column' style="flex: 2;">
-          <textarea id="code"></textarea>
+          <div id="code"></div>
         </div>
         <div class='column'>
           <span id="err"></span>
@@ -65,23 +74,43 @@
 
     <script type="module">
       import init, {check_parse_err, maker_panel_version, render} from "./pkg/maker_panel_wasm.js";
+
+      const flask = new CodeFlask('#code', {
+        language: 'js',
+        lineNumbers: true,
+      });
+      var urlParams = new URLSearchParams(window.location.search);
+      const c = urlParams.get('c');
+      if (c) {
+        flask.updateCode(atob(c));
+      }
+      const h = urlParams.get('h');
+      var convex_hull = h && h == '1';
+      var pz = {transform: null};
+      if (urlParams.get('px')) {
+        pz = {
+          transform: {
+            x: parseFloat(urlParams.get('px')),
+            y: parseFloat(urlParams.get('py')),
+            scaleX: parseFloat(urlParams.get('z')),
+          },
+        };
+      }
+
       init()
         .then(() => {
           // Remove the loading message.
           document.getElementById('loading').innerText = " maker panel v" + maker_panel_version();
 
-          const code = document.getElementById('code');
           const err = document.getElementById('err');
           const out = document.getElementById('render');
           var svg = new SVG(out);
-          var pz = null;
 
-          code.addEventListener('input', function() {
-            var c = code.value;
+          flask.onUpdate((c) => {
             // Check the syntax and print any errors if maker-panel expressions
             // are typed.
             if (c != "") {
-              var parse_result = check_parse_err(code.value);
+              var parse_result = check_parse_err(c);
               if (!parse_result) {
                 err.innerText = "✓ Panel valid";
               } else {
@@ -96,8 +125,7 @@
             } else {
               err.innerText = "";
             }
-
-          }, false);
+          });
 
           function to_color(c) {
             switch (c) {
@@ -121,50 +149,79 @@
           }
 
           function handle_hotkeys(e) {
-            if (e.ctrlKey && e.key === 'r') {
-              let previous_pan = (pz || {transform: null}).transform;
-              let r = render(code.value);
-              console.log(r);
-
-              svg.clear();
-              var links = svg.group();
-              var markers = svg.group();
-              var nodes = svg.group();
-
-              // Create the geometry.
-              var polygon = nodes.group().polygon(r.outer).fill('none').stroke({ width: 0.2 });
-              var bbox = polygon.bbox();
-              for (var i = 0; i < r.inners.length; i++) {
-                nodes.group().polygon(r.inners[i]).fill('none').stroke({ width: 0.15 });
-              }
-
-              // Create the surface features.
-              for (var i = 0; i < r.surface_features.length; i++) {
-                const f = r.surface_features[i];
-                if (f.Circle) {
-                  nodes.group().circle(f.Circle.radius * 2)
-                    .center(f.Circle.center[0], f.Circle.center[1])
-                    .fill(to_color(f.Circle.layer)).stroke('none');
-                }
-                if (f.Drill) {
-                  nodes.group().circle(f.Drill.radius * 2)
-                    .center(f.Drill.center[0], f.Drill.center[1])
-                    .fill(to_color('#252525')).stroke('none');
-                }
-              }
-
-
-              // Make the group pannable and zoomable, set starting position.
-              pz = nodes.panZoom();
-              if (previous_pan)
-                pz.setPosition(previous_pan.x, previous_pan.y, previous_pan.scaleX);
-              else
-                pz.setPosition(50-bbox.x, 50-bbox.y, 2);
-
+            if (e.ctrlKey && e.key == 'q') {
+              convex_hull = !convex_hull;
+              do_render();
               e.preventDefault();
-            };
+            }
+
+            if (e.ctrlKey && e.key === 'r') {
+              do_render();
+              e.preventDefault();
+            }
+            if (e.ctrlKey && e.key == 's') {
+              urlParams.set("c", btoa(flask.getCode()));
+              urlParams.set("h", convex_hull ? '1' : '0');
+              if (pz.transform) {
+                urlParams.set("px", pz.transform.x);
+                urlParams.set("py", pz.transform.y);
+                urlParams.set("z", pz.transform.scaleX);
+              }
+              history.pushState(null, null, "?"+urlParams.toString());
+              e.preventDefault();
+            }
           }
-          code.onkeydown = handle_hotkeys;
+
+          function do_render() {
+            var previous_pan = (pz || {transform: null}).transform;
+            let r = render(flask.getCode(), convex_hull);
+
+            svg.clear();
+            var links = svg.group();
+            var markers = svg.group();
+            var nodes = svg.group();
+
+            // Create the geometry.
+            var polygon = nodes.group().polygon(r.outer).fill('none').stroke({ width: 0.2 });
+            var bbox = polygon.bbox();
+            for (var i = 0; i < r.inners.length; i++) {
+              nodes.group().polygon(r.inners[i]).fill('none').stroke({ width: 0.15 });
+            }
+
+            // Create the surface features.
+            for (var i = 0; i < r.surface_features.length; i++) {
+              const f = r.surface_features[i];
+              if (f.Circle) {
+                nodes.group().circle(f.Circle.radius * 2)
+                  .center(f.Circle.center[0], f.Circle.center[1])
+                  .fill(to_color(f.Circle.layer)).stroke('none');
+              }
+              if (f.Drill) {
+                nodes.group().circle(f.Drill.radius * 2)
+                  .center(f.Drill.center[0], f.Drill.center[1])
+                  .fill(to_color('#252525')).stroke('none');
+              }
+            }
+
+
+            // Make the group pannable and zoomable, set starting position.
+            pz = nodes.panZoom();
+            if (previous_pan)
+              pz.setPosition(previous_pan.x, previous_pan.y, previous_pan.scaleX);
+            else
+              pz.setPosition(50-bbox.x, 50-bbox.y, 2);
+          }
+
+          window.onkeydown = handle_hotkeys;
+          // const txts = document.getElementsByTagName('textarea');
+          // for (var i = 0; i < txts.length; i++) {
+          //   txts[i].onkeydown = handle_hotkeys;
+          // }
+
+          // If we already had code it must have been loaded by query parameter.
+          if (flask.getCode()) {
+            do_render();
+          }
 
         });
     </script>
