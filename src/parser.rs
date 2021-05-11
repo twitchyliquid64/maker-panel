@@ -104,7 +104,7 @@ impl ResolverContext {
                 let ctx = self.cel_ctx();
                 p.execute(&ctx)
             }
-            Err(e) => panic!(e), // Should never panic: we checked while parsing
+            Err(e) => panic!("{}", e), // Should never panic: we checked while parsing
         }
     }
 }
@@ -126,7 +126,7 @@ pub enum InnerAST {
 impl InnerAST {
     fn into_inner_feature<'a>(
         self,
-        ctx: &mut ResolverContext,
+        _ctx: &mut ResolverContext,
     ) -> Box<dyn super::features::InnerFeature + 'a> {
         use super::features::{MechanicalSolderPoint, ScrewHole, Smiley};
 
@@ -744,6 +744,7 @@ fn parse_rmount(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, dir) = alt((
         tag_no_case("mount_cut_left"),
         tag_no_case("mount_cut_right"),
+        tag_no_case("mount_cut_down"),
         tag_no_case("mount_cut"),
     ))(i)?;
     let (i, deets) = context("mount details", cut(parse_details))(i)?;

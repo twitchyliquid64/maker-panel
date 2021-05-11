@@ -696,7 +696,7 @@ dependencies = [
 
 [[package]]
 name = "maker-panel"
-version = "0.12.2"
+version = "0.12.3"
 dependencies = [
  "cel-interpreter",
  "conv",

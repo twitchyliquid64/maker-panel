@@ -67,12 +67,13 @@ impl super::Feature for RMount {
 
         let out = MultiPolygon::<f64>::from(channel.to_polygon()).union(&nut.to_polygon());
 
-        use geo::algorithm::rotate::Rotate;
+        let origin = geo::Point::new(0., 0.);
+        use geo::algorithm::rotate::RotatePoint;
         match self.direction {
             crate::Direction::Up => Some(out),
-            crate::Direction::Down => Some(out.rotate(180.)),
-            crate::Direction::Left => Some(out.rotate(-90.)),
-            crate::Direction::Right => Some(out.rotate(90.)),
+            crate::Direction::Down => Some(out.rotate_around_point(180., origin)),
+            crate::Direction::Left => Some(out.rotate_around_point(-90., origin)),
+            crate::Direction::Right => Some(out.rotate_around_point(90., origin)),
         }
     }
 

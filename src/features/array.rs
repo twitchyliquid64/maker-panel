@@ -49,15 +49,38 @@ impl<U: super::Feature + fmt::Debug + Clone> Column<U> {
     fn all_bounds(&self) -> Vec<geo::Rect<f64>> {
         self.array
             .iter()
-            .map(|f| match f.edge_union() {
-                Some(edge) => {
-                    use geo::bounding_rect::BoundingRect;
-                    edge.bounding_rect().unwrap()
+            .map(|f| {
+                let add_b = match f.edge_union() {
+                    Some(edge) => {
+                        use geo::bounding_rect::BoundingRect;
+                        edge.bounding_rect()
+                    }
+                    None => None,
+                };
+                let sub_b = match f.edge_subtract() {
+                    Some(edge) => {
+                        use geo::bounding_rect::BoundingRect;
+                        edge.bounding_rect()
+                    }
+                    None => None,
+                };
+
+                match (add_b, sub_b) {
+                    (Some(b), None) => b,
+                    (None, Some(b)) => b,
+                    (Some(u), Some(s)) => {
+                        use geo::bounding_rect::BoundingRect;
+                        use geo_booleanop::boolean::BooleanOp;
+                        u.to_polygon()
+                            .union(&s.to_polygon())
+                            .bounding_rect()
+                            .unwrap()
+                    }
+                    (None, None) => geo::Rect::new(
+                        Coordinate::<f64> { x: 0., y: 0. },
+                        Coordinate::<f64> { x: 0., y: 0. },
+                    ),
                 }
-                None => geo::Rect::new(
-                    Coordinate::<f64> { x: 0., y: 0. },
-                    Coordinate::<f64> { x: 0., y: 0. },
-                ),
             })
             .collect()
     }
@@ -74,37 +97,22 @@ impl<U: super::Feature + fmt::Debug + Clone> Column<U> {
         largest: geo::Rect<f64>,
     ) -> Box<dyn Iterator<Item = Option<(f64, f64)>> + 'a> {
         Box::new(
-            self.array
+            self.all_bounds()
                 .iter()
-                .map(|f| match f.edge_union() {
-                    Some(edge_geo) => Some(edge_geo.clone()),
-                    None => None,
-                })
-                .scan(0f64, |y_off, f| {
-                    // accumulate the heights of each element so we can
-                    // adjust them to tile downwards.
-                    use geo::bounding_rect::BoundingRect;
-                    let h = match f {
-                        Some(ref f) => f.clone().bounding_rect().unwrap().height(),
-                        None => 0.0,
-                    };
-                    let out = Some((f, *y_off));
-                    *y_off = *y_off + h;
+                .scan(0f64, |y_off, b| {
+                    let out = Some((b, *y_off));
+                    *y_off = *y_off + b.height();
                     out
                 })
-                .map(move |(g, y_off)| match g {
-                    Some(g) => {
-                        use geo::bounding_rect::BoundingRect;
-                        let bounds = g.bounding_rect().unwrap();
-
-                        Some(match self.align {
-                            crate::Align::Start => (largest.min().x - bounds.min().x, y_off),
-                            crate::Align::End => (largest.max().x - bounds.max().x, y_off),
-                            crate::Align::Center => (largest.center().x - bounds.center().x, y_off),
-                        })
-                    }
-                    None => None,
-                }),
+                .map(move |(bounds, y_off)| {
+                    Some(match self.align {
+                        crate::Align::Start => (largest.min().x - bounds.min().x, y_off),
+                        crate::Align::End => (largest.max().x - bounds.max().x, y_off),
+                        crate::Align::Center => (largest.center().x - bounds.center().x, y_off),
+                    })
+                })
+                .collect::<Vec<_>>()
+                .into_iter(),
         )
     }
 }
@@ -155,6 +163,31 @@ impl<U: super::Feature + fmt::Debug + Clone> super::Feature for Column<U> {
         } else {
             out
         }
+    }
+
+    fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
+        let out = self
+            .array
+            .iter()
+            .map(|f| match f.edge_subtract() {
+                Some(edge_geo) => Some(edge_geo.clone()),
+                None => None,
+            })
+            .zip(self.translations(self.largest()).into_iter())
+            .filter(|(f, t)| f.is_some() && t.is_some())
+            .map(|(f, t)| (f.unwrap(), t.unwrap()))
+            .fold(None, |mut acc, (g, (tx, ty))| {
+                use geo::translate::Translate;
+                use geo_booleanop::boolean::BooleanOp;
+                if let Some(current) = acc {
+                    acc = Some(g.translate(tx, ty).union(&current));
+                } else {
+                    acc = Some(g.translate(tx, ty));
+                };
+                acc
+            });
+
+        out
     }
 
     fn translate(&mut self, v: Coordinate<f64>) {

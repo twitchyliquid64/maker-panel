@@ -31,7 +31,7 @@
       .column:last-child {
         border-left: 1px solid #999;
       }
-      
+
       #code {
         position: relative;
         width: 100%;
@@ -156,8 +156,8 @@
             }
 
             if (e.ctrlKey && e.key === 'r') {
-              do_render();
               e.preventDefault();
+              do_render();
             }
             if (e.ctrlKey && e.key == 's') {
               urlParams.set("c", btoa(flask.getCode()));
@@ -171,6 +171,7 @@
               e.preventDefault();
             }
           }
+          window.onkeydown = handle_hotkeys;
 
           function do_render() {
             var previous_pan = (pz || {transform: null}).transform;
@@ -211,12 +212,6 @@
             else
               pz.setPosition(50-bbox.x, 50-bbox.y, 2);
           }
-
-          window.onkeydown = handle_hotkeys;
-          // const txts = document.getElementsByTagName('textarea');
-          // for (var i = 0; i < txts.length; i++) {
-          //   txts[i].onkeydown = handle_hotkeys;
-          // }
 
           // If we already had code it must have been loaded by query parameter.
           if (flask.getCode()) {
