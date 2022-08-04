@@ -10,7 +10,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 maker-panel = { path = "../", default-features = false }
-wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+# wasm-pack build -m no-install --target web
+wasm-bindgen = { version = "0.2.79", features = ["serde-serialize"] }
 serde = { version = "1.0", features = ["derive"] }
 
 [build-dependencies]
