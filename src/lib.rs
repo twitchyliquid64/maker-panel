@@ -113,6 +113,7 @@ pub enum Err {
 pub struct Panel<'a> {
     pub features: Vec<Box<dyn Feature + 'a>>,
     convex_hull: bool,
+    grid_separation: Option<isize>,
 }
 
 impl<'a> Panel<'a> {
@@ -120,9 +121,11 @@ impl<'a> Panel<'a> {
     pub fn new() -> Self {
         let features = Vec::new();
         let convex_hull = false;
+        let grid_separation = None;
         Self {
             features,
             convex_hull,
+            grid_separation,
         }
     }
 
@@ -131,15 +134,22 @@ impl<'a> Panel<'a> {
     pub fn with_capacity(sz: usize) -> Self {
         let features = Vec::with_capacity(sz);
         let convex_hull = false;
+        let grid_separation = None;
         Self {
             features,
             convex_hull,
+            grid_separation,
         }
     }
 
     /// Enables or disables a convex hull transform on the computed edge geometry.
     pub fn convex_hull(&mut self, convex_hull: bool) {
         self.convex_hull = convex_hull;
+    }
+
+    /// Sets the grid separation that should be rendered on the SVG.
+    pub fn set_grid_separation(&mut self, grid_separation: Option<isize>) {
+        self.grid_separation = grid_separation;
     }
 
     /// Adds a feature to the panel.
@@ -448,6 +458,67 @@ impl<'a> Panel<'a> {
                         ..usvg::Path::default()
                     }));
                 }
+            }
+        }
+
+        // for the grid
+        if let Some(sep) = self.grid_separation {
+            let lower = ((bounds.min().x.floor() as isize) / sep) * sep;
+            let upper = ((bounds.max().x.ceil() as isize) / sep) * sep;
+            let mut curs: isize = lower;
+            while curs <= upper {
+                let mut p = usvg::PathData::with_capacity(2);
+                p.push_move_to(curs as f64, bounds.min().y);
+                p.push_line_to(curs as f64, bounds.max().y);
+                rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                    stroke: Some(usvg::Stroke {
+                        paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
+                        width: usvg::StrokeWidth::new(0.1),
+                        ..usvg::Stroke::default()
+                    }),
+                    data: std::rc::Rc::new(p),
+                    ..usvg::Path::default()
+                }));
+
+                #[cfg(feature = "text")]
+                rtree
+                    .root()
+                    .append_kind(usvg::NodeKind::Image(text::blit_text_span(
+                        curs as f64 + 0.8,
+                        bounds.min().y + 0.5,
+                        &curs.to_string(),
+                    )));
+
+                curs += sep;
+            }
+
+            let lower = ((bounds.min().y.floor() as isize) / sep) * sep;
+            let upper = ((bounds.max().y.ceil() as isize) / sep) * sep;
+            let mut curs: isize = lower;
+            while curs <= upper {
+                let mut p = usvg::PathData::with_capacity(2);
+                p.push_move_to(bounds.min().x, curs as f64);
+                p.push_line_to(bounds.max().x, curs as f64);
+                rtree.root().append_kind(usvg::NodeKind::Path(usvg::Path {
+                    stroke: Some(usvg::Stroke {
+                        paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
+                        width: usvg::StrokeWidth::new(0.1),
+                        ..usvg::Stroke::default()
+                    }),
+                    data: std::rc::Rc::new(p),
+                    ..usvg::Path::default()
+                }));
+
+                #[cfg(feature = "text")]
+                rtree
+                    .root()
+                    .append_kind(usvg::NodeKind::Image(text::blit_text_span(
+                        bounds.min().x + 0.5,
+                        curs as f64 + 0.8,
+                        &curs.to_string(),
+                    )));
+
+                curs += sep;
             }
         }
 

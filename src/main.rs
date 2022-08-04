@@ -230,6 +230,14 @@ pub enum Cmd {
         )]
         fit_to: RenderFitTo,
 
+        #[structopt(
+            name = "grid-separation",
+            short = "g",
+            long = "grid-separation",
+            about = "The spacing between lines on the grid, if set"
+        )]
+        grid_sep: Option<isize>,
+
         output: PathBuf,
     },
     #[structopt(name = "gen", about = "Generates CAD files.")]
@@ -326,11 +334,16 @@ fn main() {
     };
 }
 
-fn run_cmd(args: Opt, panel: Panel) -> Result<(), Err> {
+fn run_cmd(args: Opt, mut panel: Panel) -> Result<(), Err> {
     let mut stdout = std::io::stdout();
 
     match args.cmd {
-        Cmd::Render { output, fit_to } => {
+        Cmd::Render {
+            output,
+            fit_to,
+            grid_sep,
+        } => {
+            panel.set_grid_separation(grid_sep);
             let n = panel.make_svg().unwrap();
             // println!("{}", n.to_string(usvg::XmlOptions::default()));
             resvg::render_node(&n.root(), fit_to.0, Some(usvg::Color::white()))
