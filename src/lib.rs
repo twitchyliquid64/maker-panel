@@ -474,6 +474,8 @@ impl<'a> Panel<'a> {
                     stroke: Some(usvg::Stroke {
                         paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
                         width: usvg::StrokeWidth::new(0.1),
+                        dasharray: Some(vec![0.25, 0.25, 0.1, 0.25]),
+                        linejoin: usvg::LineJoin::Round,
                         ..usvg::Stroke::default()
                     }),
                     data: std::rc::Rc::new(p),
@@ -503,6 +505,8 @@ impl<'a> Panel<'a> {
                     stroke: Some(usvg::Stroke {
                         paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
                         width: usvg::StrokeWidth::new(0.1),
+                        dasharray: Some(vec![0.25, 0.25, 0.1, 0.25]),
+                        linejoin: usvg::LineJoin::Round,
                         ..usvg::Stroke::default()
                     }),
                     data: std::rc::Rc::new(p),
