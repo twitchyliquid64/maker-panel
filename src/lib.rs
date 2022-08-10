@@ -474,7 +474,7 @@ impl<'a> Panel<'a> {
                     stroke: Some(usvg::Stroke {
                         paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
                         width: usvg::StrokeWidth::new(0.1),
-                        dasharray: Some(vec![0.25, 0.25, 0.1, 0.25]),
+                        dasharray: Some(vec![0.25, 0.75]),
                         linejoin: usvg::LineJoin::Round,
                         ..usvg::Stroke::default()
                     }),
@@ -505,7 +505,7 @@ impl<'a> Panel<'a> {
                     stroke: Some(usvg::Stroke {
                         paint: usvg::Paint::Color(usvg::Color::new(0, 0, 0)),
                         width: usvg::StrokeWidth::new(0.1),
-                        dasharray: Some(vec![0.25, 0.25, 0.1, 0.25]),
+                        dasharray: Some(vec![0.25, 0.75]),
                         linejoin: usvg::LineJoin::Round,
                         ..usvg::Stroke::default()
                     }),
@@ -764,5 +764,65 @@ mod tests {
         let ig = r.edge_union().unwrap();
         // eprintln!("{:?}", ig);
         assert!(ig.contains(&geo::Coordinate::from([3.9, -0.5])));
+    }
+
+    #[test]
+    fn test_cel_basic() {
+        let mut panel = Panel::new();
+        panel.push_spec("let ye = !{2};\nR<$ye>").unwrap();
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        // eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 1.99 && bounds.width() < 2.01);
+        assert!(bounds.height() > 1.99 && bounds.height() < 2.01);
+
+        let mut panel = Panel::new();
+        panel.push_spec("let ye = !{2.0};\nR<$ye>").unwrap();
+
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        // eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 1.99 && bounds.width() < 2.01);
+        assert!(bounds.height() > 1.99 && bounds.height() < 2.01);
+    }
+
+    #[test]
+    fn test_cel_expr() {
+        let mut panel = Panel::new();
+        panel
+            .push_spec("let ye = !{2 + 2.0};\nR<!{2}, $ye>")
+            .unwrap();
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        // eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 1.99 && bounds.width() < 2.01);
+        assert!(bounds.height() > 3.99 && bounds.height() < 4.01);
+    }
+
+    #[test]
+    fn test_cel_wrap() {
+        let mut panel = Panel::new();
+        panel
+            .push_spec("let ye = !{2 + 1.0};\nwrap(R<!{2}>) with { left align exterior => R<!{ye + 1}>,\n }")
+            .unwrap();
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        // eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 5.99 && bounds.width() < 6.01);
+        assert!(bounds.height() > 3.99 && bounds.height() < 4.01);
+    }
+
+    #[test]
+    fn test_rotate() {
+        let mut panel = Panel::new();
+        panel.push_spec("rotate(90) { C<2.5> }").unwrap();
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = panel.edge_geometry().unwrap().bounding_rect().unwrap();
+        eprintln!("{:?}\n\n{:?}", panel.features, bounds);
+        assert!(bounds.width() > 4.99 && bounds.width() < 5.0001);
+        assert!(bounds.height() > 4.99 && bounds.height() < 5.0001);
     }
 }

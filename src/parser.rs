@@ -234,6 +234,10 @@ pub enum AST {
     Negative {
         inners: Vec<Box<AST>>,
     },
+    Rotate {
+        rotation: Value,
+        inners: Vec<Box<AST>>,
+    },
 }
 
 impl AST {
@@ -382,6 +386,13 @@ impl AST {
                 Ok(out.unwrap())
             }
             AST::Negative { inners } => Ok(Box::new(crate::features::Negative::new(
+                inners
+                    .into_iter()
+                    .map(|f| f.into_feature(ctx))
+                    .collect::<Result<Vec<_>, Err>>()?,
+            ))),
+            AST::Rotate { rotation, inners } => Ok(Box::new(crate::features::Rotate::new(
+                rotation.rfloat(ctx)?,
                 inners
                     .into_iter()
                     .map(|f| f.into_feature(ctx))
@@ -1090,7 +1101,7 @@ fn parse_var(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
 
 pub fn parse_comment(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     let (i, _) = multispace0(i)?;
-    let (i, _) = tag("#")(i)?;
+    let (i, _) = alt((tag("#"), tag("//")))(i)?;
     let (i, v) = take_while(|chr| chr != '\n')(i)?;
     Ok((i, AST::Comment(v.to_string())))
 }
@@ -1138,6 +1149,50 @@ fn parse_negative(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     Ok((i, AST::Negative { inners: inners }))
 }
 
+fn parse_rotate(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
+    let (i, _) = multispace0(i)?;
+
+    let (i, (_, _, _, rotation, _, _, _)) = context(
+        "rotate",
+        tuple((
+            tag_no_case("rotate"),
+            multispace0,
+            tag("("),
+            parse_float,
+            multispace0,
+            tag(")"),
+            multispace0,
+        )),
+    )(i)?;
+
+    let (i, (_, inners)) = context(
+        "rotate_body",
+        delimited(
+            tag("{"),
+            tuple((
+                multispace0,
+                fold_many1(
+                    tuple((parse_geo, multispace0, opt(tag(",")))),
+                    Vec::new(),
+                    |mut acc, (inner, _, _)| {
+                        acc.push(Box::new(inner));
+                        acc
+                    },
+                ),
+            )),
+            tuple((tag("}"), multispace0)),
+        ),
+    )(i)?;
+
+    Ok((
+        i,
+        AST::Rotate {
+            rotation: rotation,
+            inners: inners,
+        },
+    ))
+}
+
 fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
     alt((
         parse_assign,
@@ -1152,6 +1207,7 @@ fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
         parse_var,
         parse_tuple,
         parse_negative,
+        parse_rotate,
         parse_comment,
     ))(i)
 }
@@ -1606,5 +1662,32 @@ mod tests {
         let out = build("let bleh = !{5};\nwrap (R<5>) with { left $bleh => R<2>, }");
         // eprintln!("{:?}", out);
         assert!(matches!(out, Ok(v) if v.len() == 1));
+    }
+
+    #[test]
+    fn test_comment() {
+        let out = parse_geo("# yooooooo");
+        assert!(matches!(out, Ok(("", AST::Comment(msg))) if
+            msg == " yooooooo"
+        ));
+
+        let out = parse_geo("// yeeeeeeeee");
+        assert!(matches!(out, Ok(("", AST::Comment(msg))) if
+            msg == " yeeeeeeeee"
+        ));
+    }
+
+    #[test]
+    fn test_rotate() {
+        let out = parse_geo("rotate(45.0){C<2>}");
+        eprintln!("{:?}", out);
+        assert!(
+            matches!(out, Ok(("", AST::Rotate{ rotation, inners })) if inners.len() == 1 &&
+                matches!(&*inners[0], AST::Circle{ coords: None, radius: r, inner: None }  if
+                    r.float() > 1.99 && r.float() < 2.01
+                ) &&
+                matches!(rotation.float(), f if f < 45.01 && f > 44.99)
+            )
+        );
     }
 }
