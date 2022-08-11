@@ -244,6 +244,22 @@ negative {
 C<10>
 ```
 
+#### Rotate
+
+A rotate construction lets you rotate the edge geometry of contained features about the origin. Note that the positioning of
+inner features like screw holes is not updated, so only use this for edge geometry.
+
+`rotate(<angle in degrees>) { <rotated geometry> }`
+
+
+EG:
+
+```
+rotate(45) {
+  R<5, 10>
+}
+```
+
 ## Other language constructs
 
 ### CEL expressions

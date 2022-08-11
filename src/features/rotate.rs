@@ -119,5 +119,10 @@ mod tests {
         let bounds = a.edge_union().unwrap().bounding_rect().unwrap();
         assert!(bounds.width() > 2.99);
         assert!(bounds.height() < 1.01);
+
+        use geo::algorithm::centroid::Centroid;
+        let centroid = a.edge_union().unwrap().centroid().unwrap();
+        assert!(centroid.x() > -0.01 && centroid.x() < 0.01);
+        assert!(centroid.y() > -0.01 && centroid.y() < 0.01);
     }
 }
