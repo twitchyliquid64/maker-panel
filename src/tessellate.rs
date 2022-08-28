@@ -69,6 +69,40 @@ pub fn tessellate_2d(
     Ok(buffers)
 }
 
+pub fn normals_from_tessellation(verts: &Vec<[f64; 3]>, inds: &Vec<u16>) -> Vec<[f32; 3]> {
+    let v_conv = |idx: u16| {
+        let v = verts[idx as usize];
+        [v[0] as f32, v[1] as f32, v[2] as f32]
+    };
+
+    inds.chunks_exact(3)
+        .map(|inds| {
+            let verts = [v_conv(inds[0]), v_conv(inds[1]), v_conv(inds[2])];
+
+            // Compute the normal of the face via dot product of the verts.
+            // We don't use a real math library because im still learning
+            // this stuff, and i wanted to do it by hand (feel free to PR).
+            let u = [
+                verts[1][0] - verts[0][0],
+                verts[1][1] - verts[0][1],
+                verts[1][2] - verts[0][2],
+            ];
+            let v = [
+                verts[2][0] - verts[0][0],
+                verts[2][1] - verts[0][1],
+                verts[2][2] - verts[0][2],
+            ];
+            let normal = [
+                (u[1] * v[2]) - (u[2] * v[1]),
+                (u[2] * v[0]) - (u[0] * v[2]),
+                (u[0] * v[1]) - (u[1] * v[0]),
+            ];
+
+            normal
+        })
+        .collect()
+}
+
 pub fn tessellate_3d(buffer: VertexBuffers<Point, u16>) -> (Vec<[f64; 3]>, Vec<u16>) {
     // eprintln!("buffer: {:?} ({})", buffer, buffer.vertices.chunks_exact(3).count());
 

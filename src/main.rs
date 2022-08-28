@@ -121,6 +121,7 @@ impl Fmt {
             #[cfg(feature = "tessellate")]
             Fmt::Stl => {
                 let (verts, inds) = panel.tessellate_3d().map_err(|e| Err::General(e))?;
+                let normals = maker_panel::normals_from_tessellation(&verts, &inds);
                 use stl_io::{Normal, Triangle, Vertex};
 
                 let v_conv = |idx: u16| {
@@ -130,27 +131,9 @@ impl Fmt {
 
                 let mesh = inds
                     .chunks_exact(3)
-                    .map(|inds| {
+                    .zip(normals)
+                    .map(|(inds, normal)| {
                         let verts = [v_conv(inds[0]), v_conv(inds[1]), v_conv(inds[2])];
-
-                        // Compute the normal of the face via dot product of the verts.
-                        // We don't use a real math library because im still learning
-                        // this stuff, and i wanted to do it by hand (feel free to PR).
-                        let u = [
-                            verts[1][0] - verts[0][0],
-                            verts[1][1] - verts[0][1],
-                            verts[1][2] - verts[0][2],
-                        ];
-                        let v = [
-                            verts[2][0] - verts[0][0],
-                            verts[2][1] - verts[0][1],
-                            verts[2][2] - verts[0][2],
-                        ];
-                        let normal = [
-                            (u[1] * v[2]) - (u[2] * v[1]),
-                            (u[2] * v[0]) - (u[0] * v[2]),
-                            (u[0] * v[1]) - (u[1] * v[0]),
-                        ];
 
                         Triangle {
                             normal: Normal::new(normal),

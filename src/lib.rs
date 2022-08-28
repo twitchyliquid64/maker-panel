@@ -15,6 +15,8 @@ mod parser;
 #[cfg(feature = "tessellate")]
 mod tessellate;
 #[cfg(feature = "tessellate")]
+pub use tessellate::normals_from_tessellation;
+#[cfg(feature = "tessellate")]
 pub use tessellate::{Point as TPoint, TessellationError, VertexBuffers};
 #[cfg(feature = "text")]
 mod text;
