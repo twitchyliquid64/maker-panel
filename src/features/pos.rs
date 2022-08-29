@@ -389,4 +389,24 @@ where
             )
             .collect()
     }
+
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<super::NamedInfo> {
+        use geo_booleanop::boolean::BooleanOp;
+        let bounds = compute_bounds(match self.inner.edge_union() {
+            Some(p) => p,
+            None => MultiPolygon(vec![]),
+        });
+
+        self.elements
+            .iter()
+            .fold(self.inner.named_info(), |mut acc, (feature, position)| {
+                let t = position.compute_translation(bounds, self.feature_bounds(feature).unwrap());
+                for mut info in feature.named_info() {
+                    info.translate(t.0, t.1);
+                    acc.push(info);
+                }
+                acc
+            })
+    }
 }

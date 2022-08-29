@@ -238,6 +238,10 @@ pub enum AST {
         rotation: Value,
         inners: Vec<Box<AST>>,
     },
+    Name {
+        name: String,
+        inner: Box<AST>,
+    },
 }
 
 impl AST {
@@ -397,6 +401,10 @@ impl AST {
                     .into_iter()
                     .map(|f| f.into_feature(ctx))
                     .collect::<Result<Vec<_>, Err>>()?,
+            ))),
+            AST::Name { inner, name } => Ok(Box::new(crate::features::Named::new(
+                name,
+                inner.into_feature(ctx)?,
             ))),
             AST::Assign(_, _) => unreachable!(),
             AST::Comment(_) => unreachable!(),
@@ -1194,7 +1202,7 @@ fn parse_rotate(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
 }
 
 fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
-    alt((
+    let (i, feature) = alt((
         parse_assign,
         parse_cel,
         parse_array,
@@ -1209,7 +1217,21 @@ fn parse_geo(i: &str) -> IResult<&str, AST, VerboseError<&str>> {
         parse_negative,
         parse_rotate,
         parse_comment,
-    ))(i)
+    ))(i)?;
+
+    let (i, name) = opt(tuple((multispace0, tag("%"), parse_ident)))(i)?;
+
+    if let Some((_, _, name)) = name {
+        return Ok((
+            i,
+            AST::Name {
+                name: name,
+                inner: Box::new(feature),
+            },
+        ));
+    }
+
+    Ok((i, feature))
 }
 
 /// Parses the provided panel spec and returns the series of features
@@ -1689,5 +1711,17 @@ mod tests {
                 matches!(rotation.float(), f if f < 45.01 && f > 44.99)
             )
         );
+    }
+
+    #[test]
+    fn test_name() {
+        let out = parse_geo("C<2> % circle1");
+        eprintln!("{:?}", out);
+        assert!(matches!(out, Ok(("", AST::Name{ name, inner })) if
+            matches!(&*inner, AST::Circle{ coords: None, radius: r, inner: None }  if
+                r.float() > 1.99 && r.float() < 2.01
+            ) &&
+            name == "circle1"
+        ));
     }
 }

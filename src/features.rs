@@ -7,6 +7,7 @@ use std::fmt;
 mod array;
 mod circle;
 mod mechanical_solder_point;
+mod named;
 mod negative;
 mod pos;
 mod r_mount;
@@ -20,6 +21,7 @@ mod unit;
 pub use array::Column;
 pub use circle::Circle;
 pub use mechanical_solder_point::MechanicalSolderPoint;
+pub use named::Named;
 pub use negative::Negative;
 pub use pos::{AtPos, Positioning};
 pub use r_mount::RMount;
@@ -29,6 +31,26 @@ pub use screw_hole::ScrewHole;
 pub use smiley::Smiley;
 pub use triangle::Triangle;
 pub use unit::Unit;
+
+/// Describes named geometry.
+#[derive(Debug, Clone)]
+pub struct NamedInfo {
+    pub name: String,
+    pub bounds: geo::Rect<f64>,
+}
+
+impl NamedInfo {
+    pub fn new(name: String, bounds: geo::Rect<f64>) -> Self {
+        NamedInfo { name, bounds }
+    }
+    pub fn translate(&mut self, x: f64, y: f64) {
+        use geo::prelude::Translate;
+        self.bounds.translate_inplace(x, y);
+    }
+    pub fn name_index(&mut self, idx: usize) {
+        self.name = self.name.clone() + &idx.to_string();
+    }
+}
 
 /// Specifies geometry interior to the bounds of the panel.
 pub trait InnerFeature: fmt::Display + DynClone + fmt::Debug {
@@ -77,6 +99,11 @@ pub trait Feature: fmt::Display + DynClone + fmt::Debug {
     fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
         None
     }
+
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<NamedInfo> {
+        vec![]
+    }
 }
 
 dyn_clone::clone_trait_object!(Feature);
@@ -100,6 +127,10 @@ impl<'a> Feature for Box<dyn Feature + 'a> {
 
     fn edge_subtract(&self) -> Option<MultiPolygon<f64>> {
         self.as_ref().edge_subtract()
+    }
+
+    fn named_info(&self) -> Vec<NamedInfo> {
+        self.as_ref().named_info()
     }
 }
 

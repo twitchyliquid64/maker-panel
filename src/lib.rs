@@ -165,6 +165,16 @@ impl<'a> Panel<'a> {
         Ok(())
     }
 
+    /// Returns information about the named geometry in the panel.
+    pub fn named_info(&self) -> Vec<features::NamedInfo> {
+        self.features.iter().fold(vec![], |mut acc, f| {
+            for info in f.named_info() {
+                acc.push(info);
+            }
+            acc
+        })
+    }
+
     /// Computes the outer geometry of the panel.
     pub fn edge_geometry(&self) -> Option<MultiPolygon<f64>> {
         let mut edge = self
@@ -826,5 +836,20 @@ mod tests {
         eprintln!("{:?}\n\n{:?}", panel.features, bounds);
         assert!(bounds.width() > 4.99 && bounds.width() < 5.0001);
         assert!(bounds.height() > 4.99 && bounds.height() < 5.0001);
+    }
+
+    #[test]
+    fn test_named() {
+        let mut panel = Panel::new();
+        panel
+            .push_spec("wrap([2]R<3> % inner) with { left align exterior => R<2> % rect }")
+            .unwrap();
+        //eprintln!("{:?}\n", panel.features);
+
+        let infos = panel.named_info();
+        //eprintln!("{:?}\n\n", infos);
+        assert!(infos.len() == 3 && infos[0].name == "inner0" && infos[0].bounds.min().x < -1.499);
+        assert!(infos.len() == 3 && infos[1].name == "inner1" && infos[1].bounds.min().x < 1.5001);
+        assert!(infos.len() == 3 && infos[2].name == "rect" && infos[2].bounds.min().x < -3.4999);
     }
 }

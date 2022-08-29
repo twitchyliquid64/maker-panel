@@ -79,6 +79,16 @@ where
     fn interior(&self) -> Vec<super::InnerAtom> {
         vec![]
     }
+
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<super::NamedInfo> {
+        self.features.iter().fold(vec![], |mut acc, feature| {
+            for info in feature.named_info() {
+                acc.push(info);
+            }
+            acc
+        })
+    }
 }
 
 #[cfg(test)]

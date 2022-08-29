@@ -91,6 +91,29 @@ impl<U: super::Feature + Clone> super::Feature for Tile<U> {
         }
     }
 
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<super::NamedInfo> {
+        let inner_geo = self.inner.edge_union();
+        if inner_geo.is_none() {
+            return vec![];
+        }
+
+        use geo::bounding_rect::BoundingRect;
+        let bounds = inner_geo.unwrap().bounding_rect().unwrap();
+        let mut out = vec![];
+
+        for i in 0..self.amt {
+            for mut info in self.inner.named_info() {
+                let (x, y) = self.direction.offset(bounds);
+                info.translate(i as f64 * x, i as f64 * y);
+                info.name_index(i);
+                out.push(info);
+            }
+        }
+
+        out
+    }
+
     fn translate(&mut self, v: Coordinate<f64>) {
         self.inner.translate(v)
     }

@@ -217,6 +217,25 @@ impl<U: super::Feature + fmt::Debug + Clone> super::Feature for Column<U> {
             .flatten()
             .collect()
     }
+
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<super::NamedInfo> {
+        self.array
+            .iter()
+            .map(|f| f.named_info())
+            .zip(self.translations(self.largest()).into_iter())
+            .filter(|(_infos, t)| t.is_some())
+            .map(|(infos, t)| (infos, t.unwrap()))
+            .enumerate()
+            .fold(vec![], |mut acc, (i, (infos, (tx, ty)))| {
+                for mut info in infos {
+                    info.translate(tx, ty);
+                    info.name_index(i);
+                    acc.push(info);
+                }
+                acc
+            })
+    }
 }
 
 #[cfg(test)]
