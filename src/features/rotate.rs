@@ -84,6 +84,21 @@ where
     fn interior(&self) -> Vec<super::InnerAtom> {
         vec![]
     }
+
+    /// named_info returns information about named geometry.
+    fn named_info(&self) -> Vec<super::NamedInfo> {
+        self.features
+            .iter()
+            .map(|f| f.named_info())
+            .fold(vec![], |mut acc, infos| {
+                for info in infos {
+                    use geo::algorithm::{bounding_rect::BoundingRect, rotate::Rotate};
+                    let b = geo::Polygon::from(info.bounds).rotate(self.rotate);
+                    acc.push(super::NamedInfo::new(info.name, b.bounding_rect().unwrap()));
+                }
+                acc
+            })
+    }
 }
 
 #[cfg(test)]

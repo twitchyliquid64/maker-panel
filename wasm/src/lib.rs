@@ -35,6 +35,13 @@ pub struct Render {
     pub outer: Vec<(f64, f64)>,
     pub inners: Vec<Vec<(f64, f64)>>,
     pub surface_features: Vec<Surface>,
+    pub named_features: Vec<NamedInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NamedInfo {
+    pub name: String,
+    bounds: (f64, f64, f64, f64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,16 +98,30 @@ pub fn render(spec: &str, convex_hull: bool) -> JsValue {
         return JsValue::from_serde(&Render {
             outer: vec![],
             inners: vec![],
+            named_features: vec![],
             surface_features: vec![],
         })
         .unwrap();
     }
+
+    let named: Vec<_> = panel
+        .named_info()
+        .iter()
+        .map(|f| {
+            let b = f.bounds;
+            NamedInfo {
+                name: f.name.clone(),
+                bounds: (b.min().x, b.min().y, b.max().x, b.max().y),
+            }
+        })
+        .collect();
 
     use std::convert::TryFrom;
     let polys: Vec<_> = edge
         .unwrap()
         .iter()
         .map(|p| Render {
+            named_features: named.clone(),
             outer: p.exterior().points_iter().map(|p| p.x_y()).collect(),
             inners: p
                 .interiors()

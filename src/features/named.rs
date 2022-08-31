@@ -50,7 +50,15 @@ where
     fn named_info(&self) -> Vec<super::NamedInfo> {
         use geo::algorithm::bounding_rect::BoundingRect;
 
-        let bounds = match self.feature.edge_union() {
+        let union = self.feature.edge_union();
+
+        let geometry = if union.is_none() {
+            self.feature.edge_subtract()
+        } else {
+            union
+        };
+
+        let bounds = match geometry {
             Some(geometry) => geometry.bounding_rect().unwrap(),
             _ => geo::Rect::new((0., 0.), (0., 0.)),
         };

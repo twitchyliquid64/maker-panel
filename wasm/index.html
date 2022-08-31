@@ -58,6 +58,7 @@
         <a href="https://github.com/twitchyliquid64/maker-panel/blob/main/docs/spec-reference.md">[Reference]</a> |
         <a href="https://github.com/twitchyliquid64/maker-panel">[Github]</a>
         <span id="loading">Backend loading, please wait.</span>
+        <span id="inst">Press CTRL-R to render, CTRL-Q to toggle convex-hull, and CTRL-S to generate a sharable URL.</span>
       </p>
 
       <div class='row' id='interactables'>
@@ -67,6 +68,7 @@
         <div class='column'>
           <span id="err"></span>
           <div id="render"></div>
+          <span id="tooltip"></span>
         </div>
       </div>
 
@@ -100,11 +102,15 @@
       init()
         .then(() => {
           // Remove the loading message.
-          document.getElementById('loading').innerText = " maker panel v" + maker_panel_version();
+          document.getElementById('loading').innerText = " maker panel v" + maker_panel_version() + ".";
 
           const err = document.getElementById('err');
           const out = document.getElementById('render');
+          const tooltip = document.getElementById('tooltip');
           var svg = new SVG(out);
+
+          var listener = false;
+          var named = [];
 
           flask.onUpdate((c) => {
             // Check the syntax and print any errors if maker-panel expressions
@@ -158,6 +164,7 @@
             if (e.ctrlKey && e.key === 'r') {
               e.preventDefault();
               do_render();
+              document.getElementById('inst').innerText = '';
             }
             if (e.ctrlKey && e.key == 's') {
               urlParams.set("c", btoa(flask.getCode()));
@@ -176,6 +183,7 @@
           function do_render() {
             var previous_pan = (pz || {transform: null}).transform;
             let r = render(flask.getCode(), convex_hull);
+            named = r.named_features.reverse();
 
             svg.clear();
             var links = svg.group();
@@ -211,6 +219,26 @@
               pz.setPosition(previous_pan.x, previous_pan.y, previous_pan.scaleX);
             else
               pz.setPosition(50-bbox.x, 50-bbox.y, 2);
+
+            if (!listener) {
+              listener = true;
+              document.getElementById('render').addEventListener("mousemove",  function (e) {
+                let eRect = svg.node.getBoundingClientRect();
+                let transform = pz.transform;
+                const x = Math.round(((e.clientX - transform.x - eRect.x) / transform.scaleX + Number.EPSILON) * 100) / 100;
+                const y = Math.round(((e.clientY - transform.y - eRect.y) / transform.scaleY + Number.EPSILON) * 100) / 100;
+                var msg = '(' + x + ', ' + y + ')';
+                
+                for (const f of named) {
+                  if (x >= f.bounds[0] && x <= f.bounds[2] && y >= f.bounds[1] && y <= f.bounds[3]) {
+                    msg = f.name + ': ' + msg;
+                    break;
+                  }
+                }
+
+                tooltip.innerText = msg;
+              });
+            }
           }
 
           // If we already had code it must have been loaded by query parameter.
